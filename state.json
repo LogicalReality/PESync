@@ -1,8 +1,8 @@
 {
     "eden_version": "v0.2.0-rc1",
-    "prod_keys": [],
-    "firmwares": [
-        "https://github.com/THZoria/NX_Firmware/releases/download/21.2.0/Firmware.21.2.0.zip",
-        "https://github.com/THZoria/NX_Firmware/releases/download/21.1.0/Firmware.21.1.0.zip"
-    ]
+    "prod_keys": [
+        "https://files.prodkeys.net/ProdKeys.Net-21.2.0.zip",
+        "https://files.prodkeys.net/ProdKeys.NET-21.1.0.zip"
+    ],
+    "firmwares": []
 }
