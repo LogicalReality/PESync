@@ -56,7 +56,8 @@ def upload_to_drive(file_path, file_name):
         file = service.files().create(
             body=file_metadata, 
             media_body=media, 
-            fields='id'
+            fields='id',
+            supportsAllDrives=True
         ).execute()
         print(f"Upload successful. File ID: {file.get('id')}")
     except Exception as e:
