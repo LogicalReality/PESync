@@ -44,5 +44,6 @@ jobs:
             echo "No changes to commit (version is up to date)"
           else
             git commit -m "chore: update Eden AppImage version"
+            git pull --rebase
             git push
           fi
