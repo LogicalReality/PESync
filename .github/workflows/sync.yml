@@ -1,4 +1,4 @@
-name: Eden Sync to GDrive
+name: Eden Sync to Dropbox
 
 on:
   schedule:
