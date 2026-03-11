@@ -127,7 +127,13 @@ def load_state():
     state = {"core_v": "", "prod_keys": [], "sys_comps": []}
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r") as f:
-            state.update(json.load(f))
+            loaded = json.load(f)
+            # Migración de llaves para evitar re-descargas después de la ofuscación
+            if "eden_version" in loaded and not loaded.get("core_v"):
+                loaded["core_v"] = loaded.pop("eden_version")
+            if "firmwares" in loaded and not loaded.get("sys_comps"):
+                loaded["sys_comps"] = loaded.pop("firmwares")
+            state.update(loaded)
     elif os.path.exists(VERSION_FILE_OLD):
         with open(VERSION_FILE_OLD, "r") as f:
             state["core_v"] = f.read().strip()
