@@ -3,6 +3,8 @@ import sys
 import json
 import urllib.request
 import re
+import time
+from bs4 import BeautifulSoup # type: ignore
 import dropbox # type: ignore
 from dropbox.exceptions import ApiError # type: ignore
 from dropbox.files import WriteMode # type: ignore
@@ -11,49 +13,76 @@ EDEN_API = "https://git.eden-emu.dev/api/v1/repos/eden-emu/eden/releases"
 STATE_FILE = "state.json"
 VERSION_FILE_OLD = "version.txt"
 
-# Target file substring (AppImage para Linux GCC)
+# Nombre de archivo objetivo (AppImage para Linux GCC)
 TARGET_FILE_SUBSTRING = "amd64-gcc-standard.AppImage"
 
 def get_latest_eden_release():
-    print("Fetching latest Eden release...")
+    print("Obteniendo la última versión de Eden...")
     req = urllib.request.Request(EDEN_API, headers={'User-Agent': 'Mozilla/5.0'})
     try:
         with urllib.request.urlopen(req) as response:
             data = json.loads(response.read().decode('utf-8'))
             if not data:
-                print("No releases found.")
+                print("No se encontraron versiones.")
                 return None
-            return data[0] # First item is the latest release
+            return data[0] # El primer elemento es la última versión
     except Exception as e:
-        print(f"Failed to fetch releases: {e}")
+        print(f"Error al obtener las versiones: {e}")
         return None
 
-def get_latest_links(url):
-    print(f"Fetching links from {url}...")
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    try:
-        html = urllib.request.urlopen(req).read().decode('utf-8')
-        links = re.findall(r'href=[\'\"]([^\'\">]+\.zip)[\'\"]', html)
-        unique_links = []
-        for l in links:
-            if l not in unique_links:
-                unique_links.append(l)
-        return unique_links[:2] # type: ignore
-    except Exception as e:
-        print(f"Failed to fetch links from {url}: {e}")
-        return []
+def is_valid_link(link: str) -> bool:
+    """
+    SPEC (Contract): Verifica que el payload cumpla con el formato esperado.
+    Evita que procesemos datos basura si la página web cambia su estructura.
+    """
+    return link.startswith("https://") and link.endswith(".zip")
+
+def get_latest_links(url, max_retries=3):
+    print(f"Obteniendo enlaces desde {url}...")
+    
+    for attempt in range(max_retries):
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8')
+            
+            # Usar BeautifulSoup para mayor robustez en lugar de regex
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            # Buscamos y validamos contra nuestra SPEC
+            links = [a['href'] for a in soup.find_all('a', href=True) if is_valid_link(a['href'])]
+            
+            # VALIDACIÓN: ¿Los datos lucen correctos?
+            if not links:
+                print(f"CRÍTICO: No se encontraron enlaces .zip válidos en {url}. ¡La estructura del sitio podría haber cambiado!")
+                return []
+            
+            unique_links = []
+            for l in links:
+                if l not in unique_links:
+                    unique_links.append(l)
+            return unique_links[:2] # type: ignore
+            
+        except Exception as e:
+            print(f"Intento {attempt + 1} fallido para {url}: {e}")
+            if attempt < max_retries - 1:
+                print("Reintentando en 5 segundos...")
+                time.sleep(5)
+            else:
+                print(f"Máximo de reintentos alcanzado. No se pudo obtener de {url}.")
+                return []
 
 def upload_to_dropbox(file_path, file_name):
-    print(f"Uploading {file_name} to Dropbox...")
+    print(f"Subiendo {file_name} a Dropbox...")
     
     try:
         app_key = os.environ["DROPBOX_APP_KEY"]
         app_secret = os.environ["DROPBOX_APP_SECRET"]
         refresh_token = os.environ["DROPBOX_REFRESH_TOKEN"]
     except KeyError as e:
-        print(f"Warning: Environment secret {e} is not configured.")
-        print("Skipping Dropbox upload (dry-run mode).")
-        return True # Return true so the script continues downloading/storing state locally
+        print(f"Advertencia: El secreto de entorno {e} no está configurado.")
+        print("Tratando de continuar sin subir a Dropbox (dry-run mode).")
+        return True # Retorna true para que el script continúe descargando/guardando el estado localmente
         
     try:
         dbx = dropbox.Dropbox(
@@ -80,13 +109,13 @@ def upload_to_dropbox(file_path, file_name):
                         dbx.files_upload_session_append_v2(f.read(CHUNK_SIZE), cursor)
                         cursor.offset = f.tell()
 
-        print("Upload to Dropbox successful!")
+        print("¡Subida a Dropbox exitosa!")
         return True
     except ApiError as e:
-        print(f"Failed to upload to Dropbox API: {e}")
+        print(f"Error al subir mediante la API de Dropbox: {e}")
         return False
     except Exception as e:
-        print(f"Unexpected error uploading to Dropbox: {e}")
+        print(f"Error inesperado subiendo a Dropbox: {e}")
         return False
 
 def load_state():
@@ -104,7 +133,7 @@ def save_state(state):
         json.dump(state, f, indent=4)
 
 def download_file(url, file_name):
-    print(f"Downloading {file_name} from {url}...")
+    print(f"Descargando {file_name} desde {url}...")
     try:
         req = urllib.request.Request(url, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -113,22 +142,22 @@ def download_file(url, file_name):
         with urllib.request.urlopen(req) as response, open(file_name, 'wb') as out_file:
             import shutil
             shutil.copyfileobj(response, out_file)
-        print("Download completed successfully.")
+        print("Descarga completada exitosamente.")
         return True
     except Exception as e:
-        print(f"Failed to download file: {e}")
+        print(f"Error al descargar el archivo: {e}")
         return False
 
 def main():
     state = load_state()
     state_changed = False
     
-    # 1. Process Eden
+    # 1. Procesar Eden
     latest_release = get_latest_eden_release()
     if latest_release:
         release_tag = latest_release.get("tag_name", "unknown")
         if state["eden_version"] != release_tag:
-            print(f"New Eden version found: {release_tag}")
+            print(f"Nueva versión de Eden encontrada: {release_tag}")
             target_asset = None
             for asset in latest_release.get("assets", []):
                 if TARGET_FILE_SUBSTRING in asset.get("name", "") and not asset.get("name").endswith(".zsync"):
@@ -143,14 +172,14 @@ def main():
                         state["eden_version"] = release_tag
                         state_changed = True
             else:
-                print(f"Error: Could not find target asset for Eden release {release_tag}")
+                print(f"Error: No se encontró el recurso objetivo para la versión de Eden {release_tag}")
         else:
-            print(f"Eden version {release_tag} is already up to date.")
+            print(f"La versión de Eden {release_tag} ya está actualizada.")
             
-    # 2. Process Prod Keys
+    # 2. Procesar Prod Keys
     keys_links = get_latest_links("https://prodkeys.net/eden-prod-keys-13/")
     if keys_links:
-        # We only download the ones we don't already have
+        # Solo descargamos los que no tenemos todavía
         new_keys = [link for link in keys_links if link not in state.get("prod_keys", [])] # type: ignore
         for link in new_keys:
             file_name = link.split("/")[-1] # type: ignore
@@ -161,17 +190,17 @@ def main():
                     state["prod_keys"].append(link) # type: ignore
                     state_changed = True
         
-        # Keep only the latest 2 in state
+        # Mantener solo los últimos 2 en el estado
         all_keys = state.get("prod_keys", [])
         if len(all_keys) > 2:
-            # The links we just retrieved are the latest, so we intersect them.
-            # But the state also just appended the new keys. It's safer to keep the new_keys in order.
-            # However `keys_links` are the true latest 2.
-            # So anything in `state["prod_keys"]` that is also in `keys_links` should be kept.
+            # Los enlaces que acabamos de obtener son los últimos, así que los intersecamos.
+            # Pero el estado también incluyó las nuevas claves. Es más seguro mantener new_keys en orden.
+            # Sin embargo `keys_links` son los verdaderos últimos 2.
+            # Así que cualquier cosa en `state["prod_keys"]` que también esté en `keys_links` debe guardarse.
             state["prod_keys"] = [k for k in keys_links if k in state["prod_keys"]] # type: ignore
             state_changed = True
             
-    # 3. Process Firmwares
+    # 3. Procesar Firmwares
     firmware_links = get_latest_links("https://prodkeys.net/latest-switch-firmwares-v19/")
     if firmware_links:
         new_firmwares = [link for link in firmware_links if link not in state.get("firmwares", [])] # type: ignore
@@ -191,9 +220,9 @@ def main():
 
     if state_changed:
         save_state(state)
-        print("State updated locally. (state.json)")
+        print("Estado actualizado localmente. (state.json)")
     else:
-        print("No new updates found.")
+        print("No se encontraron nuevas actualizaciones.")
 
 if __name__ == "__main__":
     main()
