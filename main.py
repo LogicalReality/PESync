@@ -3,9 +3,9 @@ import sys
 import json
 import urllib.request
 import re
-import dropbox
-from dropbox.exceptions import ApiError
-from dropbox.files import WriteMode
+import dropbox # type: ignore
+from dropbox.exceptions import ApiError # type: ignore
+from dropbox.files import WriteMode # type: ignore
 
 EDEN_API = "https://git.eden-emu.dev/api/v1/repos/eden-emu/eden/releases"
 STATE_FILE = "state.json"
@@ -38,7 +38,7 @@ def get_latest_links(url):
         for l in links:
             if l not in unique_links:
                 unique_links.append(l)
-        return unique_links[:2]
+        return unique_links[:2] # type: ignore
     except Exception as e:
         print(f"Failed to fetch links from {url}: {e}")
         return []
@@ -136,8 +136,8 @@ def main():
                     break
                     
             if target_asset:
-                download_url = target_asset["browser_download_url"]
-                file_name = target_asset["name"]
+                download_url = target_asset["browser_download_url"] # type: ignore
+                file_name = target_asset["name"] # type: ignore
                 if download_file(download_url, file_name):
                     if upload_to_dropbox(file_name, file_name):
                         state["eden_version"] = release_tag
@@ -151,14 +151,14 @@ def main():
     keys_links = get_latest_links("https://prodkeys.net/eden-prod-keys-13/")
     if keys_links:
         # We only download the ones we don't already have
-        new_keys = [link for link in keys_links if link not in state.get("prod_keys", [])]
+        new_keys = [link for link in keys_links if link not in state.get("prod_keys", [])] # type: ignore
         for link in new_keys:
-            file_name = link.split("/")[-1]
+            file_name = link.split("/")[-1] # type: ignore
             if download_file(link, file_name):
                 if upload_to_dropbox(file_name, file_name):
                     if "prod_keys" not in state:
                         state["prod_keys"] = []
-                    state["prod_keys"].append(link)
+                    state["prod_keys"].append(link) # type: ignore
                     state_changed = True
         
         # Keep only the latest 2 in state
@@ -168,25 +168,25 @@ def main():
             # But the state also just appended the new keys. It's safer to keep the new_keys in order.
             # However `keys_links` are the true latest 2.
             # So anything in `state["prod_keys"]` that is also in `keys_links` should be kept.
-            state["prod_keys"] = [k for k in keys_links if k in state["prod_keys"]]
+            state["prod_keys"] = [k for k in keys_links if k in state["prod_keys"]] # type: ignore
             state_changed = True
             
     # 3. Process Firmwares
     firmware_links = get_latest_links("https://prodkeys.net/latest-switch-firmwares-v19/")
     if firmware_links:
-        new_firmwares = [link for link in firmware_links if link not in state.get("firmwares", [])]
+        new_firmwares = [link for link in firmware_links if link not in state.get("firmwares", [])] # type: ignore
         for link in new_firmwares:
-            file_name = link.split("/")[-1]
+            file_name = link.split("/")[-1] # type: ignore
             if download_file(link, file_name):
                 if upload_to_dropbox(file_name, file_name):
                     if "firmwares" not in state:
                         state["firmwares"] = []
-                    state["firmwares"].append(link)
+                    state["firmwares"].append(link) # type: ignore
                     state_changed = True
                     
         all_firmwares = state.get("firmwares", [])
         if len(all_firmwares) > 2:
-            state["firmwares"] = [f for f in firmware_links if f in state["firmwares"]]
+            state["firmwares"] = [f for f in firmware_links if f in state["firmwares"]] # type: ignore
             state_changed = True
 
     if state_changed:
