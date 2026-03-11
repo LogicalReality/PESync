@@ -3,6 +3,8 @@ import sys
 import json
 import urllib.request
 import re
+import time
+from bs4 import BeautifulSoup
 import dropbox # type: ignore
 from dropbox.exceptions import ApiError # type: ignore
 from dropbox.files import WriteMode # type: ignore
@@ -28,20 +30,38 @@ def get_latest_eden_release():
         print(f"Failed to fetch releases: {e}")
         return None
 
-def get_latest_links(url):
+def get_latest_links(url, max_retries=3):
     print(f"Fetching links from {url}...")
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    try:
-        html = urllib.request.urlopen(req).read().decode('utf-8')
-        links = re.findall(r'href=[\'\"]([^\'\">]+\.zip)[\'\"]', html)
-        unique_links = []
-        for l in links:
-            if l not in unique_links:
-                unique_links.append(l)
-        return unique_links[:2] # type: ignore
-    except Exception as e:
-        print(f"Failed to fetch links from {url}: {e}")
-        return []
+    
+    for attempt in range(max_retries):
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8')
+            
+            # Usar BeautifulSoup para mayor robustez en lugar de regex
+            soup = BeautifulSoup(html, 'html.parser')
+            links = [a['href'] for a in soup.find_all('a', href=True) if a['href'].endswith('.zip')]
+            
+            # VALIDACIÓN (Spec)
+            if not links:
+                print(f"CRITICAL: No .zip links found at {url}. The website structure might have changed!")
+                return []
+            
+            unique_links = []
+            for l in links:
+                if l not in unique_links:
+                    unique_links.append(l)
+            return unique_links[:2] # type: ignore
+            
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed for {url}: {e}")
+            if attempt < max_retries - 1:
+                print("Retrying in 5 seconds...")
+                time.sleep(5)
+            else:
+                print(f"Max retries reached. Could not fetch from {url}.")
+                return []
 
 def upload_to_dropbox(file_path, file_name):
     print(f"Uploading {file_name} to Dropbox...")
