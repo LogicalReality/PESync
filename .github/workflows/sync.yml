@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write # Needed to push the version.txt update back to the repo
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   sync:
     runs-on: ubuntu-latest
