@@ -205,9 +205,7 @@ def main():
                     backed_up.add(file_name)
                     any_uploaded = True
     else:
-        print("ADVERTENCIA: No se pudieron obtener los links de metadata keys.")
-
-    # 3. Procesar Componentes de Sistema
+        print("ADVERTENCIA: No se pudieron obtener los links de metadata keys.")    # 3. Procesar Componentes de Sistema
     print("Verificando firmware del sistema...")
     sys_links: list[str] = get_latest_links(d("aHR0cHM6Ly9wcm9ka2V5cy5uZXQvbGF0ZXN0LXN3aXRjaC1maXJtd2FyZXMtdjE5Lw==")) or []
     if sys_links:
