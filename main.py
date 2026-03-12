@@ -16,7 +16,7 @@ B_URL = d("aHR0cHM6Ly9naXQuZWRlbi1lbXUuZGV2L2FwaS92MS9yZXBvcy9lZGVuLWVtdS9lZGVuL
 
 TARGET_FILE_SUBSTRING = d("YW1kNjQtZ2NjLXN0YW5kYXJkLkFwcEltYWdl")  # target asset identifier
 
-def get_latest_sys_version():
+def get_sys_releases(n: int = 2):
     print("Sincronizando componente...")
     req = urllib.request.Request(B_URL, headers={'User-Agent': 'Mozilla/5.0'})
     try:
@@ -25,11 +25,11 @@ def get_latest_sys_version():
             data = json.loads(response.read().decode('utf-8'))
             if not data:
                 print("No se encontraron versiones.")
-                return None
-            return data[0]
+                return []
+            return data[:n]
     except Exception as e:
         print(f"Error al obtener las versiones: {e}")
-        return None
+        return []
 
 def is_valid_link(link: str) -> bool:
     return link.startswith("https://") and link.endswith(".zip")
@@ -148,47 +148,55 @@ def main():
     any_uploaded = False
 
     # 1. Procesar Core Environment
-    latest_release: dict[str, Any] | None = get_latest_sys_version()
-    if latest_release:
+    import re as _re
+    releases: list[dict[str, Any]] = get_sys_releases(n=2)
+    all_core_in_backup = sorted(f for f in backed_up if TARGET_FILE_SUBSTRING in f)
+    backed_up_tags = [t for f in all_core_in_backup for t in _re.findall(r'v\d+\.\d+[\d.\-\w]*', f)]
+
+    if all_core_in_backup:
+        print(f"Componente en backup: {backed_up_tags}")
+    else:
+        print("No hay versiones del componente en backup aún.")
+
+    for _release in releases:
+        latest_release: dict[str, Any] = dict(_release)
         release_tag: str = str(latest_release.get("tag_name", "unknown"))
-        # Filename includes the version tag, so we check if any backed-up file contains it
         core_in_backup = [f for f in backed_up if release_tag in f and TARGET_FILE_SUBSTRING in f]
-        all_core_in_backup = sorted(f for f in backed_up if TARGET_FILE_SUBSTRING in f)
 
-        if not core_in_backup:
-            print(f"Nueva versión del emulador detectada: {release_tag}")
-            target_asset: dict[str, Any] | None = None
-            for _asset in latest_release.get("assets", []):
-                if not isinstance(_asset, dict):
-                    continue
-                asset: dict[str, Any] = _asset
-                asset_name: str = str(asset.get("name", ""))
-                if TARGET_FILE_SUBSTRING in asset_name and not asset_name.endswith(".zsync"):
-                    target_asset = asset
-                    break
+        if core_in_backup:
+            continue  # ya respaldado, pasar al siguiente
 
-            if target_asset:
-                assert target_asset is not None
-                download_url: str = str(target_asset["browser_download_url"])
-                file_name: str = str(target_asset["name"])
-                if download_asset(download_url, file_name):
-                    if upload_to_dropbox(dbx, file_name, file_name):
-                        backed_up.add(file_name)
-                        any_uploaded = True
-            else:
-                print(f"Error: No se encontró el recurso para la versión {release_tag}")
+        print(f"Procesando versión del componente: {release_tag}")
+        target_asset: dict[str, Any] | None = None
+        for _asset in latest_release.get("assets", []):
+            if not isinstance(_asset, dict):
+                continue
+            asset: dict[str, Any] = _asset
+            asset_name: str = str(asset.get("name", ""))
+            if TARGET_FILE_SUBSTRING in asset_name and not asset_name.endswith(".zsync"):
+                target_asset = asset
+                break
+
+        if target_asset:
+            assert target_asset is not None
+            download_url: str = str(target_asset["browser_download_url"])
+            file_name: str = str(target_asset["name"])
+            if download_asset(download_url, file_name):
+                if upload_to_dropbox(dbx, file_name, file_name):
+                    backed_up.add(file_name)
+                    any_uploaded = True
         else:
-            print(f"Emulador {release_tag} ya respaldado. Versiones en backup: {all_core_in_backup}")
+            print(f"Error: No se encontró el recurso para la versión {release_tag}")
+
 
     # 2. Procesar Assets de Metadata
     print("Verificando metadata keys...")
     keys_links: list[str] = get_latest_links(d("aHR0cHM6Ly9wcm9ka2V5cy5uZXQvZWRlbi1wcm9kLWtleXMtMTMv")) or []
     if keys_links:
-        new_keys = [link for link in keys_links if link.split("/")[-1] not in backed_up]
-        if not new_keys:
-            key_names = [link.split("/")[-1] for link in keys_links if link.split("/")[-1] in backed_up]
-            print(f"Metadata keys ya respaldadas. En backup: {key_names}")
-        for link in new_keys:
+        keys_in_backup = [link.split("/")[-1] for link in keys_links if link.split("/")[-1] in backed_up]
+        keys_missing  = [link for link in keys_links if link.split("/")[-1] not in backed_up]
+        print(f"Keys en backup: {len(keys_in_backup)} de {len(keys_links)} — {keys_in_backup}")
+        for link in keys_missing:
             link = str(link)
             file_name = link.split("/")[-1]
             print(f"Nueva key encontrada: {file_name}")
@@ -203,11 +211,10 @@ def main():
     print("Verificando firmware del sistema...")
     sys_links: list[str] = get_latest_links(d("aHR0cHM6Ly9wcm9ka2V5cy5uZXQvbGF0ZXN0LXN3aXRjaC1maXJtd2FyZXMtdjE5Lw==")) or []
     if sys_links:
-        new_sys = [link for link in sys_links if link.split("/")[-1] not in backed_up]
-        if not new_sys:
-            sys_names = [link.split("/")[-1] for link in sys_links if link.split("/")[-1] in backed_up]
-            print(f"Firmware ya respaldado. En backup: {sys_names}")
-        for link in new_sys:
+        sys_in_backup  = [link.split("/")[-1] for link in sys_links if link.split("/")[-1] in backed_up]
+        sys_missing    = [link for link in sys_links if link.split("/")[-1] not in backed_up]
+        print(f"Firmware en backup: {len(sys_in_backup)} de {len(sys_links)} — {sys_in_backup}")
+        for link in sys_missing:
             link = str(link)
             file_name = link.split("/")[-1]
             print(f"Nuevo firmware encontrado: {file_name}")
