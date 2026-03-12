@@ -108,10 +108,15 @@ def upload_to_dropbox(file_path, file_name):
         return False
 
 def load_state() -> dict[str, Any]:
-    state: dict[str, Any] = {"core_v": "", "prod_keys": [], "sys_comps": []}
+    state: dict[str, Any] = {"core_versions": [], "prod_keys": [], "sys_comps": []}
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r") as f:
             state.update(json.load(f))
+    # Migrate old single-string format to list
+    if "core_v" in state:
+        old_v = state.pop("core_v")
+        if old_v and old_v not in state.get("core_versions", []):
+            state.setdefault("core_versions", []).append(old_v)
     return state
 
 def save_state(state):
@@ -141,8 +146,9 @@ def main():
     latest_release: dict[str, Any] | None = get_latest_sys_version()
     if latest_release:
         release_tag: str = str(latest_release.get("tag_name", "unknown"))
-        if state["core_v"] != release_tag:
-            print(f"Nueva actualización detectada: {release_tag}")
+        core_versions: list[str] = list(state.get("core_versions", []))
+        if release_tag not in core_versions:
+            print(f"Nueva versión del emulador detectada: {release_tag}")
             target_asset: dict[str, Any] | None = None
             for _asset in latest_release.get("assets", []):
                 if not isinstance(_asset, dict):
@@ -159,12 +165,15 @@ def main():
                 file_name: str = str(target_asset["name"])
                 if download_asset(download_url, file_name):
                     if upload_to_dropbox(file_name, file_name):
-                        state["core_v"] = release_tag
+                        core_versions.append(release_tag)
+                        if len(core_versions) > 2:
+                            core_versions = [v for i, v in enumerate(core_versions) if i >= len(core_versions) - 2]
+                        state["core_versions"] = core_versions
                         state_changed = True
             else:
-                print(f"Error: No se encontró el recurso para la actualización {release_tag}")
+                print(f"Error: No se encontró el recurso para la versión {release_tag}")
         else:
-            print(f"El componente {release_tag} ya está actualizado.")
+            print(f"Emulador {release_tag} ya respaldado. Versiones en backup: {core_versions}")
 
     # 2. Procesar Assets de Metadata
     print("Verificando metadata keys...")
