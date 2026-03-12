@@ -1,4 +1,4 @@
-name: Eden Sync to Dropbox
+name: PESync to Dropbox
 
 on:
   schedule:

@@ -194,7 +194,8 @@ def main():
     if keys_links:
         keys_in_backup = [link.split("/")[-1] for link in keys_links if link.split("/")[-1] in backed_up]
         keys_missing  = [link for link in keys_links if link.split("/")[-1] not in backed_up]
-        print(f"Licencias en backup: {len(keys_in_backup)} de {len(keys_links)} — {keys_in_backup}")
+        keys_display  = [(_re.findall(r'\d+\.\d+[\d.]*\.zip', f) or [f])[0] for f in keys_in_backup]
+        print(f"Licencias en backup: {len(keys_in_backup)} de {len(keys_links)} — {keys_display}")
         for link in keys_missing:
             link = str(link)
             file_name = link.split("/")[-1]
@@ -212,7 +213,8 @@ def main():
     if sys_links:
         sys_in_backup  = [link.split("/")[-1] for link in sys_links if link.split("/")[-1] in backed_up]
         sys_missing    = [link for link in sys_links if link.split("/")[-1] not in backed_up]
-        print(f"Actualizaciones en backup: {len(sys_in_backup)} de {len(sys_links)} — {sys_in_backup}")
+        sys_display    = [(_re.findall(r'\d+\.\d+[\d.]*\.zip', f) or [f])[0] for f in sys_in_backup]
+        print(f"Actualizaciones en backup: {len(sys_in_backup)} de {len(sys_links)} — {sys_display}")
         for link in sys_missing:
             link = str(link)
             file_name = link.split("/")[-1]
@@ -236,10 +238,12 @@ def main():
     print(f"  emu : {final_core_tags if final_core_tags else 'ninguno'}")
 
     final_keys = [link.split("/")[-1] for link in (keys_links if keys_links else []) if link.split("/")[-1] in backed_up]
-    print(f"  Licencias  : {final_keys if final_keys else 'ninguna'}")
+    final_keys_display = [(_re.findall(r'\d+\.\d+[\d.]*\.zip', f) or [f])[0] for f in final_keys]
+    print(f"  Licencias  : {final_keys_display if final_keys_display else 'ninguna'}")
 
     final_sys = [link.split("/")[-1] for link in (sys_links if sys_links else []) if link.split("/")[-1] in backed_up]
-    print(f"  Sistema    : {final_sys if final_sys else 'ninguno'}")
+    final_sys_display = [(_re.findall(r'\d+\.\d+[\d.]*\.zip', f) or [f])[0] for f in final_sys]
+    print(f"  Sistema    : {final_sys_display if final_sys_display else 'ninguno'}")
     print("----------------------------------------")
 
 if __name__ == "__main__":
