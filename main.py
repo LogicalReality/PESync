@@ -153,7 +153,7 @@ def main():
     backed_up_tags = [t for f in all_core_in_backup for t in _re.findall(r'v\d+\.\d+[\d.\-\w]*', f)]
 
     if all_core_in_backup:
-        print(f"emu en backup: {backed_up_tags}")
+        print("emu en backup: {}".format(backed_up_tags))
     else:
         print("No hay versiones del emu en backup aún.")
 
