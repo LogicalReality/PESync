@@ -8,10 +8,6 @@ on:
 permissions:
   contents: write # Needed to push the version.txt update back to the repo
 
-# Environment variables (Global)
-#env:
-#  ACTIONS_RUNNER_DEBUG: true
-
 jobs:
   sync:
     runs-on: ubuntu-latest
