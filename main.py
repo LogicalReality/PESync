@@ -17,7 +17,7 @@ B_URL = d("aHR0cHM6Ly9naXQuZWRlbi1lbXUuZGV2L2FwaS92MS9yZXBvcy9lZGVuLWVtdS9lZGVuL
 TARGET_FILE_SUBSTRING = d("YW1kNjQtZ2NjLXN0YW5kYXJkLkFwcEltYWdl")  # target asset identifier
 
 def get_sys_releases(n: int = 2):
-    print("Consultando versiones disponibles del componente...")
+    print("Consultando versiones disponibles del emu...")
     req = urllib.request.Request(B_URL, headers={'User-Agent': 'Mozilla/5.0'})
     try:
         with urllib.request.urlopen(req) as response:
@@ -153,9 +153,9 @@ def main():
     backed_up_tags = [t for f in all_core_in_backup for t in _re.findall(r'v\d+\.\d+[\d.\-\w]*', f)]
 
     if all_core_in_backup:
-        print(f"Componente en backup: {backed_up_tags}")
+        print(f"emu en backup: {backed_up_tags}")
     else:
-        print("No hay versiones del componente en backup aún.")
+        print("No hay versiones del emu en backup aún.")
 
     for _release in releases:
         latest_release: dict[str, Any] = dict(_release)
@@ -165,7 +165,7 @@ def main():
         if core_in_backup:
             continue  # ya respaldado, pasar al siguiente
 
-        print(f"Procesando versión del componente: {release_tag}")
+        print(f"Procesando versión del emu: {release_tag}")
         target_asset: dict[str, Any] | None = None
         for _asset in latest_release.get("assets", []):
             if not isinstance(_asset, dict):
@@ -188,41 +188,41 @@ def main():
             print(f"Error: No se encontró el recurso para la versión {release_tag}")
 
 
-    # 2. Procesar Assets de Metadata
-    print("Verificando metadata keys...")
+    # 2. Procesar Licencias
+    print("Verificando licencias del sistema...")
     keys_links: list[str] = get_latest_links(d("aHR0cHM6Ly9wcm9ka2V5cy5uZXQvZWRlbi1wcm9kLWtleXMtMTMv")) or []
     if keys_links:
         keys_in_backup = [link.split("/")[-1] for link in keys_links if link.split("/")[-1] in backed_up]
         keys_missing  = [link for link in keys_links if link.split("/")[-1] not in backed_up]
-        print(f"Keys en backup: {len(keys_in_backup)} de {len(keys_links)} — {keys_in_backup}")
+        print(f"Licencias en backup: {len(keys_in_backup)} de {len(keys_links)} — {keys_in_backup}")
         for link in keys_missing:
             link = str(link)
             file_name = link.split("/")[-1]
-            print(f"Nueva key encontrada: {file_name}")
+            print(f"Nueva licencia encontrada: {file_name}")
             if download_asset(link, file_name):
                 if upload_to_dropbox(dbx, file_name, file_name):
                     backed_up.add(file_name)
                     any_uploaded = True
     else:
-        print("ADVERTENCIA: No se pudieron obtener los links de metadata keys.")
+        print("ADVERTENCIA: No se pudieron obtener las licencias.")
 
-    # 3. Procesar Componentes de Sistema
-    print("Verificando firmware del sistema...")
+    # 3. Procesar Actualizaciones de Sistema
+    print("Verificando actualizaciones del sistema...")
     sys_links: list[str] = get_latest_links(d("aHR0cHM6Ly9wcm9ka2V5cy5uZXQvbGF0ZXN0LXN3aXRjaC1maXJtd2FyZXMtdjE5Lw==")) or []
     if sys_links:
         sys_in_backup  = [link.split("/")[-1] for link in sys_links if link.split("/")[-1] in backed_up]
         sys_missing    = [link for link in sys_links if link.split("/")[-1] not in backed_up]
-        print(f"Firmware en backup: {len(sys_in_backup)} de {len(sys_links)} — {sys_in_backup}")
+        print(f"Actualizaciones en backup: {len(sys_in_backup)} de {len(sys_links)} — {sys_in_backup}")
         for link in sys_missing:
             link = str(link)
             file_name = link.split("/")[-1]
-            print(f"Nuevo firmware encontrado: {file_name}")
+            print(f"Nueva actualización encontrada: {file_name}")
             if download_asset(link, file_name):
                 if upload_to_dropbox(dbx, file_name, file_name):
                     backed_up.add(file_name)
                     any_uploaded = True
     else:
-        print("ADVERTENCIA: No se pudieron obtener los links de firmware.")
+        print("ADVERTENCIA: No se pudieron obtener las actualizaciones del sistema.")
 
     if any_uploaded:
         print("Sincronización completada.")
@@ -233,13 +233,13 @@ def main():
     print("\n--- Estado del almacenamiento remoto ---")
     final_core = sorted(f for f in backed_up if TARGET_FILE_SUBSTRING in f)
     final_core_tags = [t for f in final_core for t in _re.findall(r'v\d+\.\d+[\d.\-\w]*', f)]
-    print(f"  Componente : {final_core_tags if final_core_tags else 'ninguno'}")
+    print(f"  emu : {final_core_tags if final_core_tags else 'ninguno'}")
 
     final_keys = [link.split("/")[-1] for link in (keys_links if keys_links else []) if link.split("/")[-1] in backed_up]
-    print(f"  Keys       : {final_keys if final_keys else 'ninguna'}")
+    print(f"  Licencias  : {final_keys if final_keys else 'ninguna'}")
 
     final_sys = [link.split("/")[-1] for link in (sys_links if sys_links else []) if link.split("/")[-1] in backed_up]
-    print(f"  Firmware   : {final_sys if final_sys else 'ninguno'}")
+    print(f"  Sistema    : {final_sys if final_sys else 'ninguno'}")
     print("----------------------------------------")
 
 if __name__ == "__main__":
