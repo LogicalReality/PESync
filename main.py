@@ -167,13 +167,17 @@ def main():
             print(f"El componente {release_tag} ya está actualizado.")
 
     # 2. Procesar Assets de Metadata
+    print("Verificando metadata keys...")
     keys_links: list[str] = get_latest_links(d("aHR0cHM6Ly9wcm9ka2V5cy5uZXQvZWRlbi1wcm9kLWtleXMtMTMv")) or []
     if keys_links:
         prod_keys: list[str] = list(state.get("prod_keys", []))
         new_keys = [link for link in keys_links if link not in prod_keys]
+        if not new_keys:
+            print("Las metadata keys ya están actualizadas.")
         for link in new_keys:
             link = str(link)
             file_name = link.split("/")[-1]
+            print(f"Nueva key encontrada: {file_name}")
             if download_asset(link, file_name):
                 if upload_to_dropbox(file_name, file_name):
                     prod_keys.append(str(link))
@@ -183,15 +187,21 @@ def main():
         if len(prod_keys) > 2:
             state["prod_keys"] = [k for k in keys_links if k in prod_keys]
             state_changed = True
+    else:
+        print("ADVERTENCIA: No se pudieron obtener los links de metadata keys.")
 
     # 3. Procesar Componentes de Sistema
+    print("Verificando firmware del sistema...")
     sys_links: list[str] = get_latest_links(d("aHR0cHM6Ly9wcm9ka2V5cy5uZXQvbGF0ZXN0LXN3aXRjaC1maXJtd2FyZXMtdjE5Lw==")) or []
     if sys_links:
         sys_comps: list[str] = list(state.get("sys_comps", []))
         new_sys = [link for link in sys_links if link not in sys_comps]
+        if not new_sys:
+            print("El firmware del sistema ya está actualizado.")
         for link in new_sys:
             link = str(link)
             file_name = link.split("/")[-1]
+            print(f"Nuevo firmware encontrado: {file_name}")
             if download_asset(link, file_name):
                 if upload_to_dropbox(file_name, file_name):
                     sys_comps.append(str(link))
@@ -201,6 +211,8 @@ def main():
         if len(sys_comps) > 2:
             state["sys_comps"] = [f for f in sys_links if f in sys_comps]
             state_changed = True
+    else:
+        print("ADVERTENCIA: No se pudieron obtener los links de firmware.")
 
     if state_changed:
         save_state(state)
