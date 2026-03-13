@@ -11,9 +11,10 @@ Esta herramienta está pensada para la gestión personal de respaldos y la autom
 ## 🚀 Características
 
 - **Estado basado en Dropbox**: El script consulta directamente el almacenamiento remoto al iniciar para determinar qué recursos ya están respaldados, sin depender de archivos locales.
-- **Backup de 2 versiones**: Se mantienen siempre las 2 versiones más recientes de cada categoría (emu, licencias y actualizaciones del sistema).
-- **Procesamiento de Datos Dinámicos**: Utiliza `BeautifulSoup` para la identificación y validación de recursos remotos de forma automatizada.
+- **Límites de Versiones Configurable**: Permite definir cuántas versiones mantener de cada componente de forma independiente.
+- **Rotación Automática y Auto-Limpieza**: El script identifica y elimina automáticamente versiones obsoletas en la nube para mantener solo lo más reciente según la configuración, optimizando el espacio.
 - **Almacenamiento Seguro**: Integración con Dropbox para mantener redundancia de los componentes críticos, soportando subida de archivos de gran tamaño mediante fragmentación.
+- **Robustez con Fallback**: El script está diseñado para no fallar ante configuraciones incompletas, utilizando 2 versiones como valor de respaldo seguro.
 
 ## 📋 Requisitos Previos
 
@@ -43,6 +44,21 @@ Para obtener estas credenciales, ejecuta el asistente de configuración:
 ```bash
 python setup_storage.py
 ```
+
+### Configuración de Versiones
+
+Puedes personalizar cuántas versiones respaldar editando el diccionario `BACKUP_CONFIG` al inicio de `main.py`:
+
+```python
+BACKUP_CONFIG = {
+    "emu": 2,       # Versiones del Emu
+    "licenses": 2,  # Versiones de Licencias
+    "system": 2     # Versiones de Firmware/Sistema
+}
+```
+
+> [!NOTE]
+> El script utiliza un sistema de **rotación basada en la fuente**. Si una versión ya no está entre las `N` más recientes de la fuente oficial, será eliminada automáticamente de Dropbox para dejar espacio a las nuevas.
 
 ## 🏃 Ejecución
 
