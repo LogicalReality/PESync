@@ -1,3 +1,2 @@
-requests==2.32.4
 dropbox==11.36.2
 beautifulsoup4==4.12.3
