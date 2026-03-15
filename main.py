@@ -35,8 +35,7 @@ def delete_from_dropbox(dbx, file_name):
         print(f"Error al eliminar: {e}")
         return False
 
-def get_sys_releases(n: int = 2) -> list[dict[str, Any]]:
-    print("Consultando versiones disponibles del Emu...")
+def get_emu_releases(n: int = 2) -> list[dict[str, Any]]:
     req = urllib.request.Request(EMU_RELEASES_API_URL, headers={'User-Agent': 'Mozilla/5.0'})
     try:
         with urllib.request.urlopen(req) as response:
@@ -158,7 +157,7 @@ def download_asset(url, file_name):
 def process_emu_backups(dbx, backed_up: set[str]) -> bool:
     """Procesa el respaldo y rotación de versiones del Emu."""
     print("[EMU] Verificando versiones...")
-    releases: list[dict[str, Any]] = get_sys_releases(n=BACKUP_CONFIG.get("emu", 2))
+    releases: list[dict[str, Any]] = get_emu_releases(n=BACKUP_CONFIG.get("emu", 2))
     any_uploaded = False
 
     # Identificar qué versiones ya están en el backup
@@ -277,7 +276,7 @@ def process_system_backups(dbx, backed_up: set[str]) -> bool:
 def main():
     dbx = get_dropbox_client()
     if not dbx:
-        print("[CRÍTICO] Error: no se pudo conectar al almacenamiento. Abortando.")
+        print("[CRÍTICO] Error: no se pudo conectar al almacenamiento. Abortando...")
         return
 
     print("[DROPBOX] Obteniendo estado del almacenamiento remoto...")
@@ -291,13 +290,13 @@ def main():
     ])
 
     if any_uploaded:
-        print("[SISTEMA] Sincronización completada.")
+        print("[SISTEMA] Actualización de archivos completada.")
     else:
-        print("[SISTEMA] No se encontraron nuevas actualizaciones.")
+        print("[SISTEMA] No hay nuevas actualizaciones.")
 
     # Resumen final
     print("\n" + "="*40)
-    print("ESTADO FINAL DEL BACKUP".center(40))
+    print("ESTADO ACTUAL DEL BACKUP".center(40))
     print("="*40)
     
     final_emu = sorted(f for f in backed_up if EMU_ASSET_IDENTIFIER in f)
