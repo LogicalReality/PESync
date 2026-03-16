@@ -181,10 +181,10 @@ def get_dropbox_files(dbx) -> set[str]:
     """Returns the set of filenames currently in the Dropbox root folder."""
     try:
         result = dbx.files_list_folder("")
-        files: set[str] = {normalize_filename(entry.name) for entry in result.entries}
+        files: set[str] = {entry.name for entry in result.entries}
         while result.has_more:
             result = dbx.files_list_folder_continue(result.cursor)
-            files.update(normalize_filename(entry.name) for entry in result.entries)
+            files.update(entry.name for entry in result.entries)
         return files
     except Exception:
         logger.exception("Error al listar el almacenamiento remoto:")
@@ -355,28 +355,32 @@ def process_generic_backup(
     
     if links:
         # Normalizar nombres para comparación
-        normalized_links = [normalize_filename(link.split("/")[-1]) for link in links]
-        in_backup = [f for f in backed_up if any(normalize_filename(f) == nl for nl in normalized_links)]
-        missing = [link for link, nl in zip(links, normalized_links) if nl not in backed_up]
-        display = [(VERSION_REGEX.findall(f) or [f])[0] for f in in_backup]
-        logger.info(f"[{category_name}] En backup: {len(in_backup)} de {len(links)} - {display}")
+        # remote_norm: mapeo de normalized_name -> raw_url_link
+        remote_norm = {normalize_filename(link.split("/")[-1]): link for link in links}
+        # local_norm: mapeo de normalized_name -> raw_dropbox_filename
+        local_norm = {normalize_filename(f): f for f in backed_up if file_pattern in f.lower()}
         
-        for link in missing:
+        in_backup_norm = [nl for nl in remote_norm if nl in local_norm]
+        missing_norm = [nl for nl in remote_norm if nl not in local_norm]
+        
+        display = [(VERSION_REGEX.findall(local_norm[nl]) or [local_norm[nl]])[0] for nl in in_backup_norm]
+        logger.info(f"[{category_name}] En backup: {len(in_backup_norm)} de {len(links)} - {display}")
+        
+        for nl in missing_norm:
+            link = remote_norm[nl]
             file_name = link.split("/")[-1]
             logger.info(f"[{category_name}] Nuevo archivo encontrado: {file_name}")
             if download_asset(link, file_name):
                 if upload_to_dropbox(dbx, file_name, file_name):
-                    backed_up.add(normalize_filename(file_name))
+                    backed_up.add(file_name) # Guardar nombre original
                     any_uploaded = True
         
         # Rotación de backups
-        desired_files = [normalize_filename(link.split("/")[-1]) for link in links]
-        for f in list(backed_up):
-            if file_pattern in f:
-                normalized_f = normalize_filename(f)
-                if normalized_f not in desired_files:
-                    if delete_from_dropbox(dbx, f):
-                        backed_up.remove(f)
+        desired_norm = set(remote_norm.keys())
+        for nl, raw_f in local_norm.items():
+            if nl not in desired_norm:
+                if delete_from_dropbox(dbx, raw_f):
+                    backed_up.remove(raw_f)
     else:
         logger.warning(f"[{category_name}] ADVERTENCIA: No se pudieron obtener los archivos.")
     
@@ -412,12 +416,12 @@ def main():
     emu_tags = [t for f in final_emu for t in TAG_REGEX.findall(f)]
     logger.info(f"  Emu        : {emu_tags if emu_tags else 'ninguno'}")
 
-    final_keys = [f for f in backed_up if f.endswith(".zip") and re.search(r'\d+\.\d+', f) and "firmware" not in f.lower()]
-    keys_display = [(VERSION_REGEX.findall(f) or [f])[0] for f in final_keys]
+    final_keys = {normalize_filename(f) for f in backed_up if f.lower().endswith(".zip") and re.search(r'\d+\.\d+', f) and "firmware" not in f.lower()}
+    keys_display = [(VERSION_REGEX.findall(f) or [f])[0] for f in sorted(final_keys)]
     logger.info(f"  Licencias  : {keys_display if keys_display else 'ninguna'}")
 
-    final_sys = [f for f in backed_up if f.endswith(".zip") and ("firmware" in f.lower() or "v19" in f.lower())]
-    sys_display = [(VERSION_REGEX.findall(f) or [f])[0] for f in final_sys]
+    final_sys = {normalize_filename(f) for f in backed_up if f.lower().endswith(".zip") and ("firmware" in f.lower() or "v19" in f.lower())}
+    sys_display = [(VERSION_REGEX.findall(f) or [f])[0] for f in sorted(final_sys)]
     logger.info(f"  Sistema    : {sys_display if sys_display else 'ninguno'}")
     logger.info("="*40)
 
