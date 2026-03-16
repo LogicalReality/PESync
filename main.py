@@ -316,7 +316,8 @@ def process_license_backups(dbx, backed_up: set[str]) -> bool:
         decode_base64("aHR0cHM6Ly9wcm9ka2V5cy5uZXQvZWRlbi1wcm9kLWtleXMtMTMv"),
         "licenses",
         "LICENCIAS",
-        ".zip"
+        ".zip",
+        "firmware"
     )
 
 def process_system_backups(dbx, backed_up: set[str]) -> bool:
@@ -336,7 +337,8 @@ def process_generic_backup(
     url: str,
     config_key: str,
     category_name: str,
-    file_pattern: str
+    file_pattern: str,
+    exclude_pattern: str | None = None
 ) -> bool:
     """Procesa respaldo genérico para una categoría de archivos.
     
@@ -358,7 +360,10 @@ def process_generic_backup(
         # remote_norm: mapeo de normalized_name -> raw_url_link
         remote_norm = {normalize_filename(link.split("/")[-1]): link for link in links}
         # local_norm: mapeo de normalized_name -> raw_dropbox_filename
-        local_norm = {normalize_filename(f): f for f in backed_up if file_pattern in f.lower()}
+        local_norm = {
+            normalize_filename(f): f for f in backed_up 
+            if file_pattern in f.lower() and (not exclude_pattern or exclude_pattern not in f.lower())
+        }
         
         in_backup_norm = [nl for nl in remote_norm if nl in local_norm]
         missing_norm = [nl for nl in remote_norm if nl not in local_norm]
