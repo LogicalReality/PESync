@@ -1,6 +1,6 @@
 from __future__ import annotations
 import os
-import requests
+import requests # type: ignore
 import shutil
 import time
 import base64
@@ -292,9 +292,9 @@ def process_emu_backups(dbx, backed_up: set[str]) -> bool:
 
         if target_asset:
             assert target_asset is not None
-            download_url: str = str(target_asset["browser_download_url"])
+            download_url: str = str(target_asset.get("browser_download_url", ""))
             file_name: str = str(target_asset["name"])
-            if download_asset(download_url, file_name):
+            if download_url and download_asset(download_url, file_name):
                 if upload_to_dropbox(dbx, file_name, file_name):
                     backed_up.add(file_name)
                     any_uploaded = True
