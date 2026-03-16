@@ -55,24 +55,8 @@ def setup_logger(name: str = "pesync", log_file: str = "pesync.log") -> logging.
     # Evitar duplicados si el logger ya está configurado
     if logger.handlers:
         return logger
-    
-    # Validar y crear directorio del archivo de log si es necesario
-    log_dir = os.path.dirname(log_file)
-    if log_dir and not os.path.exists(log_dir):
-        try:
-            os.makedirs(log_dir, exist_ok=True)
-        except OSError as e:
-            # Si no se puede crear el directorio, usar solo console handler
-            console_handler = logging.StreamHandler()
-            console_handler.setFormatter(logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
-            ))
-            logger.addHandler(console_handler)
-            logger.error(f"No se pudo crear el directorio de logs '{log_dir}': {e}. Usando solo consola.")
-            return logger
-    
-    # Formato con timestamp y nombre del módulo
+
+    # Formato con timestamp y nombre del módulo    
     formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
@@ -82,9 +66,12 @@ def setup_logger(name: str = "pesync", log_file: str = "pesync.log") -> logging.
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
     
-    # File handler con rotation (guarda todo DEBUG y superior)
+    log_dir = os.path.dirname(log_file)
     try:
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
         file_handler = logging.handlers.RotatingFileHandler(
             log_file,
             maxBytes=1*1024*1024,  # 1MB por archivo - suficiente para GHA y local
@@ -95,9 +82,7 @@ def setup_logger(name: str = "pesync", log_file: str = "pesync.log") -> logging.
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     except OSError as e:
-        logger.error(f"No se pudo crear el archivo de log '{log_file}': {e}. Usando solo consola.")
-    
-    logger.addHandler(console_handler)
+        logger.error(f"No se pudo inicializar log en archivo '{log_file}': {e}.")
     
     return logger
 
@@ -374,8 +359,11 @@ def process_generic_backup(
             if file_pattern in f.lower() and (not exclude_pattern or exclude_pattern not in f.lower())
         }
         
-        in_backup_norm = [nl for nl in remote_norm if nl in local_norm]
-        missing_norm = [nl for nl in remote_norm if nl not in local_norm]
+        remote_keys = set(remote_norm.keys())
+        local_keys = set(local_norm.keys())
+        
+        in_backup_norm = remote_keys & local_keys
+        missing_norm = remote_keys - local_keys
         
         display = [(VERSION_REGEX.findall(local_norm[nl]) or [local_norm[nl]])[0] for nl in in_backup_norm]
         logger.info(f"[{category_name}] En backup: {len(in_backup_norm)} de {len(links)} - {display}")
@@ -403,6 +391,14 @@ def process_generic_backup(
 # ==========================================
 # PUNTO DE ENTRADA (ENTRYPOINT)
 # ==========================================
+def is_license_file(f: str) -> bool:
+    f_low = f.lower()
+    return f_low.endswith(".zip") and bool(re.search(r'\d+\.\d+', f)) and "firmware" not in f_low
+
+def is_system_file(f: str) -> bool:
+    f_low = f.lower()
+    return f_low.endswith(".zip") and ("firmware" in f_low or "v19" in f_low)
+
 def display_backup_summary(backed_up: set[str]):
     """Imprime un resumen formateado del estado actual del backup."""
     logger.info("="*40)
@@ -413,11 +409,11 @@ def display_backup_summary(backed_up: set[str]):
     emu_tags = [t for f in final_emu for t in TAG_REGEX.findall(f)]
     logger.info(f"  Emu        : {emu_tags if emu_tags else 'ninguno'}")
 
-    final_keys = {normalize_filename(f) for f in backed_up if f.lower().endswith(".zip") and re.search(r'\d+\.\d+', f) and "firmware" not in f.lower()}
+    final_keys = {normalize_filename(f) for f in backed_up if is_license_file(f)}
     keys_display = [(VERSION_REGEX.findall(f) or [f])[0] for f in sorted(final_keys)]
     logger.info(f"  Licencias  : {keys_display if keys_display else 'ninguna'}")
 
-    final_sys = {normalize_filename(f) for f in backed_up if f.lower().endswith(".zip") and ("firmware" in f.lower() or "v19" in f.lower())}
+    final_sys = {normalize_filename(f) for f in backed_up if is_system_file(f)}
     sys_display = [(VERSION_REGEX.findall(f) or [f])[0] for f in sorted(final_sys)]
     logger.info(f"  Sistema    : {sys_display if sys_display else 'ninguno'}")
     logger.info("="*40)
