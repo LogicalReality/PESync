@@ -1,6 +1,6 @@
 from __future__ import annotations
 import os
-import urllib.request
+import requests
 import shutil
 import time
 import base64
@@ -104,14 +104,14 @@ def delete_from_dropbox(dbx, file_name):
         return False
 
 def get_emu_releases(n: int = 2) -> list[dict[str, Any]]:
-    req = urllib.request.Request(EMU_RELEASES_API_URL, headers={'User-Agent': 'Mozilla/5.0'})
     try:
-        with urllib.request.urlopen(req) as response:
-            data = json.loads(response.read().decode('utf-8'))
-            if not data:
-                logger.warning("No se encontraron versiones.")
-                return []
-            return data[:n]
+        response = requests.get(EMU_RELEASES_API_URL, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
+        response.raise_for_status()
+        data = response.json()
+        if not data:
+            logger.warning("No se encontraron versiones.")
+            return []
+        return data[:n] # type: ignore
     except Exception:
         logger.exception("Error al obtener las versiones:")
         return []
@@ -134,9 +134,9 @@ def normalize_filename(filename: str) -> str:
 def get_latest_links(url: str, limit: int = 2, max_retries: int = 3) -> list[str]:
     for attempt in range(max_retries):
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=15) as response:
-                html = response.read().decode('utf-8')
+            response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+            response.raise_for_status()
+            html = response.text
 
             soup = BeautifulSoup(html, 'html.parser')
             links: list[str] = [str(a['href']) for a in soup.find_all('a', href=True) if is_valid_link(str(a['href']))]
@@ -146,7 +146,7 @@ def get_latest_links(url: str, limit: int = 2, max_retries: int = 3) -> list[str
                 return []
 
             unique_links: list[str] = list(dict.fromkeys(links))
-            return unique_links[:limit] # type: ignore[index]
+            return unique_links[:limit] # type: ignore
 
         except Exception:
             logger.warning(f"Intento {attempt + 1} fallido:")
@@ -156,7 +156,7 @@ def get_latest_links(url: str, limit: int = 2, max_retries: int = 3) -> list[str
             else:
                 logger.error("Máximo de reintentos alcanzado.")
                 return []
-    return []  # Código inalcanzable - eliminado
+    return []
 
 def get_dropbox_client():
     try:
@@ -239,12 +239,14 @@ def upload_to_dropbox(dbx, file_path, file_name):
 def download_asset(url, file_name):
     logger.info(f"Descargando: {file_name}...")
     try:
-        req = urllib.request.Request(url, headers={
+        headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
             'Referer': decode_base64("aHR0cHM6Ly9wcm9ka2V5cy5uZXQv")
-        })
-        with urllib.request.urlopen(req) as response, open(file_name, 'wb') as out_file:
-            shutil.copyfileobj(response, out_file)
+        }
+        with requests.get(url, headers=headers, stream=True, timeout=60) as r:
+            r.raise_for_status()
+            with open(file_name, 'wb') as f:
+                shutil.copyfileobj(r.raw, f)
         logger.info("Descarga completada exitosamente.")
         return True
     except Exception:
@@ -267,20 +269,19 @@ def process_emu_backups(dbx, backed_up: set[str]) -> bool:
     
     logger.info(f"[EMU] En backup: {len(core_in_backup_tags)} de {len(all_core_tags)} - {core_in_backup_tags}")
 
-    for _release in releases:
-        latest_release: dict[str, Any] = _release
-        release_tag: str = str(latest_release.get("tag_name", "unknown"))
+    for release in releases:
+        release_tag: str = str(release.get("tag_name", "unknown"))
         
         if release_tag in core_in_backup_tags:
             continue
 
         logger.info(f"[EMU] Procesando versión: {release_tag}")
         target_asset: dict[str, Any] | None = None
-        for _asset in latest_release.get("assets", []):
-            if not isinstance(_asset, dict): continue
-            asset_name: str = str(_asset.get("name", ""))
+        for asset in release.get("assets", []):
+            if not isinstance(asset, dict): continue
+            asset_name: str = str(asset.get("name", ""))
             if EMU_ASSET_IDENTIFIER in asset_name and not asset_name.endswith(".zsync"):
-                target_asset = _asset
+                target_asset = asset
                 break
 
         if target_asset:
@@ -408,11 +409,14 @@ def main():
     ])
 
     if any_uploaded:
-        logger.info("[SISTEMA] Actualizacion de archivos completada.")
+        logger.info("Actualizacion de archivos completada.")
     else:
-        logger.info("[SISTEMA] No hay nuevas actualizaciones.")
+        logger.info("No hay nuevas actualizaciones.")
 
-    # Resumen final
+    display_backup_summary(backed_up)
+
+def display_backup_summary(backed_up: set[str]):
+    """Imprime un resumen formateado del estado actual del backup."""
     logger.info("="*40)
     logger.info("ESTADO ACTUAL DEL BACKUP".center(40))
     logger.info("="*40)
