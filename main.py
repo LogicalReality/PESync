@@ -19,7 +19,7 @@ CHUNK_SIZE = 4 * 1024 * 1024  # 4MB
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # segundos
 VERSION_REGEX = re.compile(r'\d+\.\d+[\d.]*\.zip')
-TAG_REGEX = re.compile(r'v\d+\.\d+[\d.\-]*')
+TAG_REGEX = re.compile(r'v\d+\.\d+[\d.\-]*\d')
 
 # Configuración del logger
 def setup_logger(name: str = "pesync", log_file: str = "pesync.log") -> logging.Logger:
@@ -188,16 +188,24 @@ def upload_to_dropbox(dbx, file_path, file_name):
                 dbx.files_upload(f.read(), f'/{file_name}', mode=WriteMode.overwrite)
             else:
                 # Upload session para archivos grandes
-                upload_session_start = dbx.files_upload_session_start(f.read(CHUNK_SIZE))
-                cursor = UploadSessionCursor(session_id=upload_session_start.session_id, offset=CHUNK_SIZE)
+                # Primer chunk
+                chunk = f.read(CHUNK_SIZE)
+                upload_session_start = dbx.files_upload_session_start(chunk)
+                cursor = UploadSessionCursor(session_id=upload_session_start.session_id, offset=len(chunk))
                 commit = CommitInfo(path=f'/{file_name}', mode=WriteMode.overwrite)
 
+                #Chunks restantes
                 while cursor.offset < file_size:
-                    if (file_size - cursor.offset) <= CHUNK_SIZE:
-                        dbx.files_upload_session_finish(f.read(CHUNK_SIZE), cursor, commit)
+                    remaining = file_size - cursor.offset
+                    if remaining <= CHUNK_SIZE:
+                        # Último chunk
+                        chunk = f.read(remaining)
+                        dbx.files_upload_session_finish(chunk, cursor, commit)
                     else:
-                        dbx.files_upload_session_append_v2(f.read(CHUNK_SIZE), cursor)
-                        cursor.offset = f.tell()
+                        # Chunk intermedio
+                        chunk = f.read(CHUNK_SIZE)
+                        dbx.files_upload_session_append_v2(chunk, cursor)
+                        cursor.offset += len(chunk)
 
         logger.info("Archivo subido correctamente.")
         return True
