@@ -290,11 +290,10 @@ def process_emu_backups(dbx, backed_up: set[str]) -> bool:
 
     # Identificar qué versiones ya están en el backup
     all_core_tags = [str(r.get("tag_name", "unknown")) for r in releases]
-    core_in_backup_tags = []
-    
-    for tag in all_core_tags:
-        if any(tag in f and EMU_ASSET_IDENTIFIER in f for f in backed_up):
-            core_in_backup_tags.append(tag)
+    core_in_backup_tags = [
+        tag for tag in all_core_tags
+        if any(tag in f and EMU_ASSET_IDENTIFIER in f for f in backed_up)
+    ]
     
     logger.info(f"[EMU] En backup: {len(core_in_backup_tags)} de {len(all_core_tags)} - {core_in_backup_tags}")
 
@@ -306,17 +305,20 @@ def process_emu_backups(dbx, backed_up: set[str]) -> bool:
             continue
 
         logger.info(f"[EMU] Procesando versión: {release_tag}")
-        target_asset: dict[str, Any] | None = None
-        for asset in release.get("assets", []):
-            if not isinstance(asset, dict): continue
-            asset_name: str = str(asset.get("name", ""))
-            if EMU_ASSET_IDENTIFIER in asset_name and not asset_name.endswith(".zsync"):
-                target_asset = asset
-                break
+        target_asset: dict[str, Any] | None = next(
+            (
+                asset for asset in release.get("assets", [])
+                if isinstance(asset, dict)
+                and EMU_ASSET_IDENTIFIER in str(asset.get("name", ""))
+                and not str(asset.get("name", "")).endswith(".zsync")
+            ),
+            None,
+        )
 
         if target_asset:
+            assert target_asset is not None  # narrow type for static analysis
             download_url: str = str(target_asset.get("browser_download_url", ""))
-            file_name: str = str(target_asset["name"])
+            file_name: str = str(target_asset.get("name", ""))
             if download_url:
                 items_to_download.append((download_url, file_name))
         else:
