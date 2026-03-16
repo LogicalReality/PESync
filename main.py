@@ -254,6 +254,32 @@ def delete_from_dropbox(dbx, file_name):
         logger.exception("Error al eliminar:")
         return False
 
+def sync_to_dropbox(dbx, category_name: str, backed_up: set[str], items_to_download: list[tuple[str, str]], files_to_delete: list[str]) -> bool:
+    """
+    Gestiona la descarga, subida a Dropbox y limpieza de archivos obsoletos de forma genérica.
+    
+    :param items_to_download: Lista de tuplas (url_de_descarga, nombre_archivo).
+    :param files_to_delete: Lista de nombres exactos de archivos a eliminar en Dropbox.
+    """
+    any_uploaded = False
+    
+    # 1. Descargar y subir nuevos archivos
+    for download_url, file_name in items_to_download:
+        logger.info(f"[{category_name}] Nuevo archivo a procesar: {file_name}")
+        if download_asset(download_url, file_name):
+            if upload_to_dropbox(dbx, file_name, file_name):
+                # Usar set.add nativo, que es seguro modificar en memoria
+                backed_up.add(file_name) 
+                any_uploaded = True
+                
+    # 2. Limpiar archivos obsoletos en Dropbox
+    for f in files_to_delete:
+        if delete_from_dropbox(dbx, f):
+            # Eliminamos del caché local si se borró de la nube con éxito
+            backed_up.discard(f) 
+            
+    return any_uploaded
+
 # ==========================================
 # LÓGICA DE PROCESAMIENTO DE EMU (CORE)
 # ==========================================
@@ -261,7 +287,6 @@ def process_emu_backups(dbx, backed_up: set[str]) -> bool:
     """Procesa el respaldo y rotación de versiones del Emu."""
     logger.info("[EMU] Verificando versiones...")
     releases: list[dict[str, Any]] = get_emu_releases(n=BACKUP_CONFIG.get("emu", 2))
-    any_uploaded = False
 
     # Identificar qué versiones ya están en el backup
     all_core_tags = [str(r.get("tag_name", "unknown")) for r in releases]
@@ -273,6 +298,7 @@ def process_emu_backups(dbx, backed_up: set[str]) -> bool:
     
     logger.info(f"[EMU] En backup: {len(core_in_backup_tags)} de {len(all_core_tags)} - {core_in_backup_tags}")
 
+    items_to_download = []
     for release in releases:
         release_tag: str = str(release.get("tag_name", "unknown"))
         
@@ -289,29 +315,30 @@ def process_emu_backups(dbx, backed_up: set[str]) -> bool:
                 break
 
         if target_asset:
-            assert target_asset is not None
             download_url: str = str(target_asset.get("browser_download_url", ""))
             file_name: str = str(target_asset["name"])
-            if download_url and download_asset(download_url, file_name):
-                if upload_to_dropbox(dbx, file_name, file_name):
-                    backed_up.add(file_name)
-                    any_uploaded = True
+            if download_url:
+                items_to_download.append((download_url, file_name))
         else:
             logger.error(f"[EMU] Error: No se encontró el recurso para la versión {release_tag}")
 
-    # Rotación Emu
-    desired_emu_files = []
-    for release in releases:
-        for asset in release.get("assets", []):
-            name = asset.get("name", "")
-            if EMU_ASSET_IDENTIFIER in name and not name.endswith(".zsync"):
-                desired_emu_files.append(name)
+    # Rotación Emu - Determinar obsoletos
+    desired_emu_files = {
+        asset.get("name", "")
+        for release in releases
+        for asset in release.get("assets", [])
+        if EMU_ASSET_IDENTIFIER in asset.get("name", "") and not asset.get("name", "").endswith(".zsync")
+    }
     
-    for f in list(backed_up):
-        if EMU_ASSET_IDENTIFIER in f and f not in desired_emu_files:
-            if delete_from_dropbox(dbx, f):
-                backed_up.remove(f)
-    return any_uploaded
+    files_to_delete = [
+        f for f in backed_up 
+        if EMU_ASSET_IDENTIFIER in f and f not in desired_emu_files
+    ]
+    
+    if items_to_download or files_to_delete:
+        return sync_to_dropbox(dbx, "EMU", backed_up, items_to_download, files_to_delete)
+    
+    return False
 
 def process_license_backups(dbx, backed_up: set[str]) -> bool:
     """Procesa el respaldo y rotación de licencias del sistema."""
@@ -351,42 +378,40 @@ def process_generic_backup(
     
     links: list[str] = get_latest_links(url, limit=BACKUP_CONFIG.get(config_key, 2)) or []
     
-    if links:
-        # Normalizar nombres para comparación
-        remote_norm = {normalize_filename(link.split("/")[-1]): link for link in links}
-        local_norm = {
-            normalize_filename(f): f for f in backed_up 
-            if file_pattern in f.lower() and (not exclude_pattern or exclude_pattern not in f.lower())
-        }
-        
-        remote_keys = set(remote_norm.keys())
-        local_keys = set(local_norm.keys())
-        
-        in_backup_norm = remote_keys & local_keys
-        missing_norm = remote_keys - local_keys
-        
-        display = [(VERSION_REGEX.findall(local_norm[nl]) or [local_norm[nl]])[0] for nl in in_backup_norm]
-        logger.info(f"[{category_name}] En backup: {len(in_backup_norm)} de {len(links)} - {display}")
-        
-        for nl in missing_norm:
-            link = remote_norm[nl]
-            file_name = link.split("/")[-1]
-            logger.info(f"[{category_name}] Nuevo archivo encontrado: {file_name}")
-            if download_asset(link, file_name):
-                if upload_to_dropbox(dbx, file_name, file_name):
-                    backed_up.add(file_name) # Guardar nombre original
-                    any_uploaded = True
-        
-        # Rotación de backups
-        desired_norm = set(remote_norm.keys())
-        for nl, raw_f in local_norm.items():
-            if nl not in desired_norm:
-                if delete_from_dropbox(dbx, raw_f):
-                    backed_up.remove(raw_f)
-    else:
+    if not links:
         logger.warning(f"[{category_name}] ADVERTENCIA: No se pudieron obtener los archivos.")
+        return False
+        
+    # Normalizar nombres para comparación
+    remote_norm = {normalize_filename(link.split("/")[-1]): link for link in links}
+    local_norm = {
+        normalize_filename(f): f for f in backed_up 
+        if file_pattern in f.lower() and (not exclude_pattern or exclude_pattern not in f.lower())
+    }
     
-    return any_uploaded
+    remote_keys = set(remote_norm.keys())
+    local_keys = set(local_norm.keys())
+    
+    in_backup_norm = remote_keys & local_keys
+    missing_norm = remote_keys - local_keys
+    
+    display = [(VERSION_REGEX.findall(local_norm[nl]) or [local_norm[nl]])[0] for nl in in_backup_norm]
+    logger.info(f"[{category_name}] En backup: {len(in_backup_norm)} de {len(links)} - {display}")
+    
+    # 1. Preparar descargas
+    items_to_download = [
+        (remote_norm[nl], remote_norm[nl].split("/")[-1]) for nl in missing_norm
+    ]
+    
+    # 2. Preparar eliminación
+    files_to_delete = [
+        raw_f for nl, raw_f in local_norm.items() if nl not in remote_keys
+    ]
+    
+    if items_to_download or files_to_delete:
+        return sync_to_dropbox(dbx, category_name, backed_up, items_to_download, files_to_delete)
+    
+    return False
 
 # ==========================================
 # PUNTO DE ENTRADA (ENTRYPOINT)
