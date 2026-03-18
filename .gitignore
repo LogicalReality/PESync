@@ -14,3 +14,4 @@ logs/
 # Binary/OS files
 *.AppImage
 *.zip
+*.exe

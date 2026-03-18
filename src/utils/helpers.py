@@ -5,6 +5,22 @@ import time
 import logging
 import logging.handlers
 import re
+from rich.progress import Progress, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
+
+def create_shared_progress() -> Progress:
+    """Crea una barra de progreso estilo pip para usar con administradores de contexto."""
+    return Progress(
+        TextColumn("[bold blue]{task.fields[filename]}", justify="right"),
+        BarColumn(bar_width=None),
+        "[progress.percentage]{task.percentage:>3.1f}%",
+        "•",
+        DownloadColumn(),
+        "•",
+        TransferSpeedColumn(),
+        "•",
+        TimeRemainingColumn(),
+        transient=True,
+    )
 
 # ==========================================
 # CONSTANTES GLOBALES

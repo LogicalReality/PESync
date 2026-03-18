@@ -229,6 +229,33 @@ def setup_google_drive():
     if not folder_name:
         folder_name = "PESync_Backup"
         
+    print(f"\nResolviendo u obteniendo ID para la carpeta: '{folder_name}'...")
+    try:
+        from googleapiclient.discovery import build # type: ignore
+        service = build('drive', 'v3', credentials=credentials)
+        
+        query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        results = service.files().list(q=query, pageSize=1, fields="files(id, name)").execute()
+        files = results.get('files', [])
+        
+        if files:
+            folder_id = files[0]['id']
+            print(f"Carpeta existente encontrada. ID: {folder_id}")
+        else:
+            print("Carpeta no encontrada. Creándola...")
+            file_metadata = {
+                'name': folder_name,
+                'mimeType': 'application/vnd.google-apps.folder'
+            }
+            folder = service.files().create(body=file_metadata, fields='id').execute()
+            folder_id = folder.get('id')
+            print(f"Carpeta creada. ID: {folder_id}")
+            
+    except Exception as e:
+        print(f"Error al resolver la carpeta en Drive: {e}")
+        print("Continuaremos con la configuración base, pero podría fallar en ejecución.")
+        folder_id = ""
+        
     print("\n" + "=" * 60)
     print("¡ÉXITO! Aquí están los secretos que debes guardar:")
     print("Si usas GitHub Actions, ve a Settings > Secrets and variables > Actions")
@@ -243,12 +270,20 @@ def setup_google_drive():
     print(f"3) Nombre: GOOGLE_DRIVE_REFRESH_TOKEN")
     print(f"   Valor:  {refresh_token}\n")
     
-    print(f"4) Nombre: GOOGLE_DRIVE_FOLDER")
-    print(f"   Valor:  {folder_name}\n")
+    print(f"4) Nombre: GOOGLE_DRIVE_FOLDER_ID")
+    print(f"   Valor:  {folder_id}\n")
     
     print(f"5) Nombre: STORAGE_PROVIDER")
     print(f"   Valor:  googledrive\n")
     
+    print("-" * 60)
+    print("Copia y pega este bloque en tu archivo .github/workflows/sync.yml bajo 'env:':")
+    print("env:")
+    print("  STORAGE_PROVIDER: ${{ secrets.STORAGE_PROVIDER }}")
+    print("  GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}")
+    print("  GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}")
+    print("  GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}")
+    print("  GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}")
     print("=" * 60)
     
     # Intentar escribir automáticamente en .env en la RAÍZ del proyecto
@@ -258,7 +293,7 @@ def setup_google_drive():
             env_file.write(f"GOOGLE_DRIVE_CLIENT_ID={client_id}\n")
             env_file.write(f"GOOGLE_DRIVE_CLIENT_SECRET={client_secret}\n")
             env_file.write(f"GOOGLE_DRIVE_REFRESH_TOKEN={refresh_token}\n")
-            env_file.write(f"GOOGLE_DRIVE_FOLDER={folder_name}\n")
+            env_file.write(f"GOOGLE_DRIVE_FOLDER_ID={folder_id}\n")
             env_file.write(f"STORAGE_PROVIDER=googledrive\n")
         print("✅ El archivo .env ha sido actualizado automáticamente.")
     except Exception as e:
