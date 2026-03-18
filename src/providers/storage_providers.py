@@ -11,9 +11,6 @@ import dropbox  # type: ignore
 from dropbox.exceptions import ApiError  # type: ignore
 from dropbox.files import WriteMode, UploadSessionCursor, CommitInfo  # type: ignore
 import requests # type: ignore
-import subprocess
-import json
-import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from src.utils.helpers import logger  # pyre-ignore[21]
 
@@ -424,175 +421,6 @@ class GoogleDriveProvider(StorageProvider):
 
 
 # ==========================================
-# PROVEEDOR DE RCLONE (OPTIMIZADO)
-# ==========================================
-class RcloneProvider(StorageProvider):
-    """Implementación de StorageProvider usando Rclone para máximo rendimiento."""
-    
-    def __init__(self, backend_type: str):
-        self.backend_type = backend_type # "googledrive" o "dropbox"
-        self.folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID", "root")
-        self.folder_name = os.environ.get("GOOGLE_DRIVE_FOLDER", "")
-        self.service = None # Para resolución de carpeta si es necesario
-        
-    def connect(self) -> bool:
-        """Verifica si rclone está instalado y resuelve carpeta."""
-        try:
-            subprocess.run(["rclone", "--version"], capture_output=True, check=True)
-            logger.info("[RCLONE] Motor detectado y listo.")
-            
-            # Si es Google Drive y tenemos nombre pero no ID, intentamos resolverlo
-            # Reutilizamos la lógica de GoogleDriveProvider para consistencia
-            if self.backend_type == "googledrive" and self.folder_name and self.folder_id == "root":
-                self._resolve_folder_id_for_rclone()
-                
-            return True
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            logger.error("[RCLONE] Error: rclone no está instalado o no se encuentra en el PATH.")
-            return False
-
-    def _resolve_folder_id_for_rclone(self) -> None:
-        """Usa un cliente temporal de Google Drive para encontrar el ID de la carpeta."""
-        try:
-            from google.oauth2.credentials import Credentials # pyre-ignore[21]
-            from googleapiclient.discovery import build # pyre-ignore[21]
-            
-            creds = Credentials(
-                token=None,
-                refresh_token=os.environ["GOOGLE_DRIVE_REFRESH_TOKEN"],
-                client_id=os.environ["GOOGLE_DRIVE_CLIENT_ID"],
-                client_secret=os.environ["GOOGLE_DRIVE_CLIENT_SECRET"],
-                token_uri="https://oauth2.googleapis.com/token"
-            )
-            service = build('drive', 'v3', credentials=creds)
-            query = f"name='{self.folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-            results = service.files().list(q=query, pageSize=1, fields="files(id)").execute()
-            files = results.get('files', [])
-            if files:
-                self.folder_id = files[0]['id']
-                logger.info(f"[RCLONE] Carpeta resuelta: {self.folder_name} -> {self.folder_id}")
-        except Exception:
-            logger.warning(f"[RCLONE] No se pudo resolver la carpeta '{self.folder_name}', se usará la raíz.")
-
-    def list_files(self) -> set[str]:
-        """Lista archivos usando rclone ls."""
-        # Para simplificar y evitar configuraciones complejas de listado, 
-        # delegamos el listado inicial a los proveedores nativos si es necesario,
-        # o implementamos un listado básico con rclone si el usuario lo requiere.
-        # Por ahora, PESync usa este set para saber qué falta, así que implementamos rclone lsf.
-        
-        backend_cmd = self._get_backend_prefix()
-        cmd = ["rclone", "lsf", backend_cmd] + self._get_auth_flags()
-        
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            files = {line.strip() for line in result.stdout.splitlines() if line.strip()}
-            return files
-        except Exception:
-            logger.exception("[RCLONE] Error al listar archivos:")
-            return set()
-
-    def upload_file(self, local_path: str, remote_name: str) -> bool:
-        """Sube un archivo usando rclone copyto."""
-        backend_cmd = f"{self._get_backend_prefix()}{remote_name}"
-        
-        # rclone copyto <local> <remote>:<path>
-        cmd = [
-            "rclone", "copyto", 
-            local_path, 
-            backend_cmd,
-            "--progress"
-        ] + self._get_auth_flags()
-        
-        logger.info(f"[RCLONE] Subiendo con motor de alto rendimiento: {remote_name}...")
-        try:
-            # Ejecutamos de forma que se vea el progreso en la consola
-            subprocess.run(cmd, check=True)
-            logger.info(f"[RCLONE] Subida completada: {remote_name}")
-            
-            # Limpiar local tras subida exitosa (consistente con otros proveedores)
-            if os.path.exists(local_path):
-                os.remove(local_path)
-            return True
-        except Exception:
-            logger.exception(f"[RCLONE] Error crítico durante la subida de {remote_name}:")
-            return False
-
-    def upload_files(self, file_paths: list[str]) -> bool:
-        """Sube múltiples archivos usando rclone copy sobre el directorio contenedor."""
-        if not file_paths:
-            return True
-            
-        # Obtenemos el directorio donde están los archivos (asumimos que están en el mismo)
-        temp_dir = os.path.dirname(file_paths[0])
-        
-        # rclone copy <dir> <remote>:
-        # --transfers 4 permite subir 4 archivos simultáneamente
-        cmd = [
-            "rclone", "copy", 
-            temp_dir, 
-            self._get_backend_prefix(),
-            "--transfers", "4",
-            "--progress"
-        ] + self._get_auth_flags()
-        
-        logger.info(f"[RCLONE] Iniciando subida masiva de {len(file_paths)} archivos...")
-        try:
-            subprocess.run(cmd, check=True)
-            logger.info("[RCLONE] Subida masiva completada.")
-            
-            # Limpiar archivos locales tras subida exitosa
-            for p in file_paths:
-                if os.path.exists(p):
-                    os.remove(p)
-            return True
-        except Exception:
-            logger.exception("[RCLONE] Error crítico durante la subida masiva:")
-            return False
-
-    def delete_file(self, file_name: str) -> bool:
-        """Elimina un archivo usando rclone deletefile."""
-        backend_cmd = f"{self._get_backend_prefix()}{file_name}"
-        cmd = ["rclone", "deletefile", backend_cmd] + self._get_auth_flags()
-        
-        try:
-            subprocess.run(cmd, check=True)
-            return True
-        except Exception:
-            logger.exception(f"[RCLONE] Error al eliminar {file_name}:")
-            return False
-
-    def get_provider_name(self) -> str:
-        return f"Rclone ({self.backend_type})"
-
-    def _get_backend_prefix(self) -> str:
-        if self.backend_type == "googledrive":
-            # Nota importante: no usar comillas simples aquí, rclone/subprocess las toma literalmente
-            return f":drive,root_folder_id={self.folder_id}:"
-        return ":dropbox:"
-
-    def _get_auth_flags(self) -> list[str]:
-        """Genera los flags de autenticación 'on-the-fly' para rclone."""
-        flags = []
-        if self.backend_type == "googledrive":
-            token_json = json.dumps({"refresh_token": os.environ["GOOGLE_DRIVE_REFRESH_TOKEN"]})
-            flags = [
-                "--drive-client-id", os.environ["GOOGLE_DRIVE_CLIENT_ID"],
-                "--drive-client-secret", os.environ["GOOGLE_DRIVE_CLIENT_SECRET"],
-                "--drive-token", token_json
-            ]
-        elif self.backend_type == "dropbox":
-            # Para Dropbox rclone prefiere el token en este formato si es refresh token
-            token_json = json.dumps({"refresh_token": os.environ["DROPBOX_REFRESH_TOKEN"]})
-            flags = [
-                "--dropbox-client-id", os.environ["DROPBOX_APP_KEY"],
-                "--dropbox-client-secret", os.environ["DROPBOX_APP_SECRET"],
-                "--dropbox-token", token_json
-            ]
-        return flags
-
-
-# ==========================================
 # FÁBRICA DE PROVEEDORES
 # ==========================================
 def get_storage_provider() -> StorageProvider | None:
@@ -606,14 +434,7 @@ def get_storage_provider() -> StorageProvider | None:
     Por defecto retorna DropboxProvider si no se especifica.
     """
     provider = os.environ.get("STORAGE_PROVIDER", "dropbox").lower()
-    use_rclone = os.environ.get("USE_RCLONE", "false").lower() == "true"
     
-    if use_rclone:
-        if provider in ["googledrive", "dropbox"]:
-            return RcloneProvider(provider)
-        else:
-            logger.warning(f"Rclone no soporta el proveedor '{provider}'. Usando motor nativo.")
-
     if provider == "googledrive":
         return GoogleDriveProvider()
     elif provider == "dropbox":

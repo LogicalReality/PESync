@@ -26,12 +26,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           
-      - name: Install rclone
-        run: sudo apt-get install rclone -y
-
       - name: Run sync script
         env:
-          USE_RCLONE: true
           STORAGE_PROVIDER: ${{ secrets['STORAGE_PROVIDER'] }}
           DROPBOX_APP_KEY: ${{ secrets['DROPBOX_APP_KEY'] }}
           DROPBOX_APP_SECRET: ${{ secrets['DROPBOX_APP_SECRET'] }}
