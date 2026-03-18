@@ -96,7 +96,7 @@ Este script valida que las llaves guardadas en el archivo `.env` (u obtenidas v�
 
 ### Configuración de Versiones
 
-Puedes personalizar cuántas versiones respaldar editando el diccionario `BACKUP_CONFIG` al inicio de `main.py`:
+Puedes personalizar cuántas versiones respaldar editando el diccionario `BACKUP_CONFIG` al inicio de `src/utils/helpers.py`:
 
 ```python
 BACKUP_CONFIG = {
@@ -123,7 +123,8 @@ El sistema divide automáticamente las subidas grandes en bloques fijos de **8MB
 
 El proyecto sigue principios de Clean Code, dividiendo las responsabilidades en módulos independientes:
 
-- `main.py`: Punto de entrada principal que orquesta la lógica de sincronización (alta cohesión).
+- `main.py`: Punto de entrada principal que orquesta la ejecución del script.
+- `src/core/`: Contiene la lógica central de sincronización y procesamiento de archivos (`backup_logic.py`).
 - `src/providers/`: Gestiona la integración con los proveedores de almacenamiento en la nube (Dropbox, Google Drive).
 - `src/network/`: Centraliza todas las operaciones de red y descargas HTTP usando `requests`.
 - `src/utils/`: Módulos de herramientas compartidas (formateo, seguridad, logging centralizado).
