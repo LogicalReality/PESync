@@ -4,7 +4,7 @@ import requests # type: ignore
 import time
 from typing import Any
 from bs4 import BeautifulSoup # type: ignore
-from tqdm import tqdm # type: ignore
+from rich.progress import Progress, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 
 # Importar herramientas locales
 from src.utils.helpers import (  # pyre-ignore[21]
@@ -69,15 +69,23 @@ def download_asset(url, file_name):
             r.raise_for_status()
             total_size = int(r.headers.get('content-length', 0))
             
-            with open(file_name, 'wb') as f, tqdm(
-                total=total_size,
-                unit='iB',
-                unit_scale=True,
-                desc="Descargando nueva versión"
-            ) as bar:
-                for chunk in r.iter_content(chunk_size=8192):
-                    size = f.write(chunk)
-                    bar.update(size)
+            with open(file_name, 'wb') as f:
+                with Progress(
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    "[progress.percentage]{task.percentage:>3.0f}%",
+                    "•",
+                    DownloadColumn(),
+                    "•",
+                    TransferSpeedColumn(),
+                    "•",
+                    TimeRemainingColumn(),
+                    transient=False
+                ) as progress:
+                    task = progress.add_task("Descargando nueva versión", total=total_size)
+                    for chunk in r.iter_content(chunk_size=8192):
+                        size = f.write(chunk)
+                        progress.update(task, advance=size)
                     
         logger.info("Descarga completada exitosamente.")
         return True

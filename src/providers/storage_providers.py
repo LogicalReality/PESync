@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from typing import Any, Set
-from tqdm import tqdm  # type: ignore
+from rich.progress import Progress, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 import dropbox  # type: ignore
 from dropbox.exceptions import ApiError  # type: ignore
 from dropbox.files import WriteMode, UploadSessionCursor, CommitInfo  # type: ignore
@@ -120,20 +120,32 @@ class DropboxProvider(StorageProvider):
                     commit = CommitInfo(path=f'/{remote_name}', mode=WriteMode.overwrite)
                     
                     # Subir chunks restantes
-                    with tqdm(total=file_size, unit='B', unit_scale=True, desc=f"Subiendo a Dropbox") as pbar:
-                        pbar.update(len(chunk))
+                    with Progress(
+                        TextColumn("[progress.description]{task.description}"),
+                        BarColumn(),
+                        "[progress.percentage]{task.percentage:>3.0f}%",
+                        "•",
+                        DownloadColumn(),
+                        "•",
+                        TransferSpeedColumn(),
+                        "•",
+                        TimeRemainingColumn(),
+                        transient=False
+                    ) as progress:
+                        task = progress.add_task("Subiendo a Dropbox", total=file_size)
+                        progress.update(task, advance=len(chunk))
                         while True:
                             remaining = file_size - cursor.offset
                             if remaining <= CHUNK_SIZE:
                                 chunk = f.read(remaining)
                                 self.dbx.files_upload_session_finish(chunk, cursor, commit)
-                                pbar.update(len(chunk))
+                                progress.update(task, advance=len(chunk))
                                 break
                             else:
                                 chunk = f.read(CHUNK_SIZE)
                                 self.dbx.files_upload_session_append_v2(chunk, cursor)
                                 cursor.offset += len(chunk)
-                                pbar.update(len(chunk))
+                                progress.update(task, advance=len(chunk))
             
             logger.info("[DROPBOX] Archivo subido correctamente.")
             return True
@@ -319,38 +331,46 @@ class GoogleDriveProvider(StorageProvider):
                 return False
                 
             # 2. Subir en chunks con progreso
-            with open(local_path, "rb") as f, tqdm(
-                total=file_size, 
-                unit='B', 
-                unit_scale=True, 
-                desc=f"Subiendo a Google Drive"
-            ) as pbar:
-                offset = 0
-                while offset < file_size:
-                    chunk = f.read(CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    
-                    chunk_len = len(chunk)
-                    headers = {
-                        "Authorization": f"Bearer {access_token}",
-                        "Content-Range": f"bytes {offset}-{offset + chunk_len - 1}/{file_size}",
-                        "Content-Length": str(chunk_len)
-                    }
-                    
-                    # PUT del chunk
-                    chunk_response = requests.put(upload_url, headers=headers, data=chunk, timeout=300)
-                    
-                    if chunk_response.status_code in [200, 201]:
-                        # Carga finalizada con éxito
-                        pbar.update(chunk_len)
-                        break
-                    elif chunk_response.status_code == 308:
-                        # Carga parcial, siguiente chunk
-                        offset += chunk_len
-                        pbar.update(chunk_len)
-                    else:
-                        chunk_response.raise_for_status()
+            with open(local_path, "rb") as f:
+                with Progress(
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    "[progress.percentage]{task.percentage:>3.0f}%",
+                    "•",
+                    DownloadColumn(),
+                    "•",
+                    TransferSpeedColumn(),
+                    "•",
+                    TimeRemainingColumn(),
+                    transient=False
+                ) as progress:
+                    task = progress.add_task("Subiendo a Google Drive", total=file_size)
+                    offset = 0
+                    while offset < file_size:
+                        chunk = f.read(CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        
+                        chunk_len = len(chunk)
+                        headers = {
+                            "Authorization": f"Bearer {access_token}",
+                            "Content-Range": f"bytes {offset}-{offset + chunk_len - 1}/{file_size}",
+                            "Content-Length": str(chunk_len)
+                        }
+                        
+                        # PUT del chunk
+                        chunk_response = requests.put(upload_url, headers=headers, data=chunk, timeout=300)
+                        
+                        if chunk_response.status_code in [200, 201]:
+                            # Carga finalizada con éxito
+                            progress.update(task, advance=chunk_len)
+                            break
+                        elif chunk_response.status_code == 308:
+                            # Carga parcial, siguiente chunk
+                            offset += chunk_len
+                            progress.update(task, advance=chunk_len)
+                        else:
+                            chunk_response.raise_for_status()
             
             logger.info(f"[GOOGLE DRIVE] Archivo subido correctamente.")
             
