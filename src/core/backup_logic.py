@@ -11,13 +11,13 @@ from dotenv import load_dotenv # type: ignore
 import re
 
 # Importar proveedores de almacenamiento
-from src.providers.storage_providers import (
+from src.providers.storage_providers import ( # type: ignore
     get_storage_provider,
     StorageProvider
 )
 
 # Importar utilidades y red
-from src.utils.helpers import (
+from src.utils.helpers import ( # type: ignore
     logger,
     BACKUP_CONFIG,
     EMU_ASSET_IDENTIFIER,
@@ -29,7 +29,7 @@ from src.utils.helpers import (
     TAG_REGEX,
     create_shared_progress
 )
-from src.network.http_utils import (
+from src.network.http_utils import ( # type: ignore
     get_emu_releases,
     get_latest_links,
     download_asset
@@ -76,7 +76,7 @@ def sync_to_storage(
 
             with create_shared_progress() as progress:
                 with ThreadPoolExecutor(max_workers=4) as executor:
-                    futures = {executor.submit(_download, item, progress): item for item in all_items_to_download}
+                    futures = {executor.submit(_download, item, progress): item for item in all_items_to_download} # type: ignore
                     for future in as_completed(futures):
                         result = future.result()
                         if result:
@@ -184,7 +184,7 @@ def collect_generic_pending(
     in_backup_norm = remote_keys & local_keys
     missing_norm = remote_keys - local_keys
 
-    display = [(VERSION_REGEX.findall(local_norm[nl]) or [local_norm[nl]])[0] for nl in in_backup_norm]
+    display = [re.sub(r'(?i)\.zip$', '', (VERSION_REGEX.findall(local_norm[nl]) or [local_norm[nl]])[0]) for nl in in_backup_norm]
     logger.info(f"[{category_name}] En backup: {len(in_backup_norm)} de {len(links)} - {display}")
 
     items_to_download: list[tuple[str, str, str]] = [
@@ -213,11 +213,11 @@ def display_backup_summary(backed_up: set[str]):
     logger.info(f"  Emu        : {emu_tags if emu_tags else 'ninguno'}")
 
     final_keys = {normalize_filename(f) for f in backed_up if is_license_file(f)}
-    keys_display = [(VERSION_REGEX.findall(f) or [f])[0].replace('.zip', '') for f in sorted(final_keys)]
+    keys_display = [re.sub(r'(?i)\.zip$', '', (VERSION_REGEX.findall(f) or [f])[0]) for f in sorted(final_keys)]
     logger.info(f"  Licencias  : {keys_display if keys_display else 'ninguna'}")
 
     final_sys = {normalize_filename(f) for f in backed_up if is_system_file(f)}
-    sys_display = [(VERSION_REGEX.findall(f) or [f])[0].replace('.zip', '') for f in sorted(final_sys)]
+    sys_display = [re.sub(r'(?i)\.zip$', '', (VERSION_REGEX.findall(f) or [f])[0]) for f in sorted(final_sys)]
     logger.info(f"  Sistema    : {sys_display if sys_display else 'ninguno'}")
     logger.info("="*40)
 

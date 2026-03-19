@@ -27,7 +27,7 @@ def create_shared_progress() -> Progress:
 # ==========================================
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # segundos
-VERSION_REGEX = re.compile(r'\d+\.\d+[\d.]*\.zip')
+VERSION_REGEX = re.compile(r'(\d+\.\d+[\d.]*)\.zip', re.IGNORECASE)
 TAG_REGEX = re.compile(r'v\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9]+)?')
 
 # Configuración de cantidad de versiones a respaldar
