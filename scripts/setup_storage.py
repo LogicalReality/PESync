@@ -1,6 +1,13 @@
 # pyre-ignore-all-errors[21]
 import requests
 import webbrowser
+import os
+import sys
+
+# Asegurar que el directorio raíz está en el path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from src.utils.health_checks import test_dropbox_connection, test_google_drive_connection # type: ignore
 
 def main():
     print("=" * 60)
@@ -109,10 +116,26 @@ def setup_dropbox():
             print(f"⚠️ No se pudo escribir el archivo .env: {e}")
             print("Por favor, copia los valores manualmente.")
             
+        print("\n" + "-" * 60)
+        print("CONFIGURACIÓN PARA GITHUB ACTIONS (Opcional)")
+        print("El archivo '.github/workflows/sync.yml' ya está configurado en el repositorio.")
+        print("Solo necesitas añadir los siguientes 'Secrets' en GitHub:")
+        print("(Settings > Secrets and variables > Actions > New repository secret)\n")
+        print("  1. STORAGE_PROVIDER        (valor: dropbox)")
+        print("  2. DROPBOX_APP_KEY         (tu App Key)")
+        print("  3. DROPBOX_APP_SECRET      (tu App Secret)")
+        print("  4. DROPBOX_REFRESH_TOKEN   (tu Refresh Token)")
+        print("-" * 60)
+            
         print("\n¡Listo! Ya puedes ejecutar 'python main.py'.")
     else:
         print(f"\nError al obtener el token. Código: {response.status_code}")
         print(response.text)
+    
+    # --- INTEGRACIÓN DE PRUEBA DE CONEXIÓN ---
+    print("\nVerificando que la configuración sea válida...")
+    test_dropbox_connection()
+    # ----------------------------------------
     
     input("\nPresiona ENTER para cerrar esta ventana...")
 
@@ -276,15 +299,17 @@ def setup_google_drive():
     print(f"5) Nombre: STORAGE_PROVIDER")
     print(f"   Valor:  googledrive\n")
     
+    print("\n" + "-" * 60)
+    print("CONFIGURACIÓN PARA GITHUB ACTIONS (Opcional)")
+    print("El archivo '.github/workflows/sync.yml' ya está configurado en el repositorio.")
+    print("Solo necesitas añadir los siguientes 'Secrets' en GitHub:")
+    print("(Settings > Secrets and variables > Actions > New repository secret)\n")
+    print("  1. STORAGE_PROVIDER           (valor: googledrive)")
+    print("  2. GOOGLE_DRIVE_CLIENT_ID     (tu Client ID)")
+    print("  3. GOOGLE_DRIVE_CLIENT_SECRET (tu Client Secret)")
+    print("  4. GOOGLE_DRIVE_REFRESH_TOKEN (tu Refresh Token)")
+    print("  5. GOOGLE_DRIVE_FOLDER_ID     (el ID de la carpeta)")
     print("-" * 60)
-    print("Copia y pega este bloque en tu archivo .github/workflows/sync.yml bajo 'env:':")
-    print("env:")
-    print("  STORAGE_PROVIDER: ${{ secrets.STORAGE_PROVIDER }}")
-    print("  GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}")
-    print("  GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}")
-    print("  GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}")
-    print("  GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}")
-    print("=" * 60)
     
     # Intentar escribir automáticamente en .env en la RAÍZ del proyecto
     try:
@@ -299,6 +324,11 @@ def setup_google_drive():
     except Exception as e:
         print(f"⚠️ No se pudo escribir el archivo .env: {e}")
         print("Por favor, copia los valores manualmente.")
+        
+    # --- INTEGRACIÓN DE PRUEBA DE CONEXIÓN ---
+    print("\nVerificando que la configuración sea válida...")
+    test_google_drive_connection()
+    # ----------------------------------------
         
     print("\n¡Listo! Ya puedes ejecutar 'python main.py'.")
     input("\nPresiona ENTER para cerrar esta ventana...")
