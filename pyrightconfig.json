@@ -1,6 +1,0 @@
-{
-    "extraPaths": ["."],
-    "reportMissingImports": false,
-    "reportGeneralTypeIssues": false,
-    "reportOptionalMemberAccess": false
-}
