@@ -108,6 +108,33 @@ Si `BACKUP_COUNT` no está definido, el sistema usará el valor predeterminado d
 > [!NOTE]
 > El script utiliza un sistema de **rotación basada en la fuente**. Si una versión ya no está entre las `N` más recientes de la fuente oficial, será eliminada automáticamente de la nube para dejar espacio a las nuevas.
 
+### Notificaciones Telegram (opcional)
+
+PESync puede enviarte un resumen por Telegram cuando se suben nuevas versiones.
+
+**Configuración:**
+
+1. **Obtener el token del bot:**
+   - Habla con [@BotFather](https://t.me/botfather) en Telegram
+   - Envía `/newbot` y sigue las instrucciones
+   - Copia el token (ejemplo: `123456:ABC-DEF...`)
+
+2. **Obtener tu Chat ID:**
+   - Habla con [@userinfobot](https://t.me/userinfobot)
+   - Te mostrará tu `id` (ejemplo: `987654321`)
+
+3. **Configurar en `.env`:**
+   ```env
+   TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+   TELEGRAM_CHAT_ID=987654321
+   TELEGRAM_NOTIFICATIONS=true
+   ```
+
+**Notas:**
+- Si `TELEGRAM_NOTIFICATIONS=false` o las variables están vacías, no se enviarán notificaciones
+- El mensaje solo se envía cuando hay nuevas versiones subidas (no en cada ejecución)
+- Los errores de Telegram se loguean pero no bloquean la ejecución
+
 ## 🤖 Automatización (GitHub Actions)
 
 PESync está diseñado para ejecutarse de forma totalmente desatendida mediante GitHub Actions. El flujo de trabajo incluido (`.github/workflows/sync.yml`) se encarga de:
