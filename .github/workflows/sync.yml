@@ -36,4 +36,7 @@ jobs:
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets['GOOGLE_DRIVE_CLIENT_SECRET'] }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets['GOOGLE_DRIVE_REFRESH_TOKEN'] }}
           GOOGLE_DRIVE_FOLDER_ID: ${{ secrets['GOOGLE_DRIVE_FOLDER_ID'] }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets['TELEGRAM_BOT_TOKEN'] }}
+          TELEGRAM_CHAT_ID: ${{ secrets['TELEGRAM_CHAT_ID'] }}
+          TELEGRAM_NOTIFICATIONS: ${{ secrets['TELEGRAM_NOTIFICATIONS'] }}
         run: python main.py

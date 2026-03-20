@@ -27,6 +27,7 @@ graph LR
 - **Registro y Resumen Detallado**: Implementación de un Console Logger premium para seguimiento en vivo y visualización de un resumen final limpio (versiones procesadas sin extensiones redundantes).
 - **Detección Inteligente de Versiones**: Soporte mejorado y robusto para la extracción de versiones, compatible con diversas nomenclaturas y extensiones (insensible a mayúsculas/minúsculas como `.zip` y `.ZIP`).
 - **Feedback Visual (Progreso)**: Muestra barras de progreso detalladas (0-100%) en consola tanto para la descarga de archivos como para la subida a los servicios de nube (Dropbox/Google Drive).
+- **Notificaciones Telegram**: Envía mensajes automáticos cuando se completan sincronizaciones exitosas o cuando ocurren errores críticos.
 
 ## 📋 Requisitos Previos
 
@@ -108,6 +109,39 @@ Si `BACKUP_COUNT` no está definido, el sistema usará el valor predeterminado d
 > [!NOTE]
 > El script utiliza un sistema de **rotación basada en la fuente**. Si una versión ya no está entre las `N` más recientes de la fuente oficial, será eliminada automáticamente de la nube para dejar espacio a las nuevas.
 
+### Notificaciones Telegram (opcional)
+
+PESync puede enviarte notificaciones por Telegram para mantenerte informado del estado de las sincronizaciones.
+
+**Notificaciones enviadas:**
+
+- ✅ **Éxito**: Cuando se suben nuevas versiones a la nube (resumen con lista de archivos)
+- ❌ **Error**: Cuando ocurre un error crítico (tipo, mensaje y stack trace completo)
+
+**Configuración:**
+
+1. **Obtener el token del bot:**
+   - Habla con [@BotFather](https://t.me/botfather) en Telegram
+   - Envía `/newbot` y sigue las instrucciones
+   - Copia el token (ejemplo: `123456:ABC-DEF...`)
+
+2. **Obtener tu Chat ID:**
+   - Habla con [@userinfobot](https://t.me/userinfobot)
+   - Te mostrará tu `id` (ejemplo: `987654321`)
+
+3. **Configurar en `.env`:**
+   ```env
+   TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+   TELEGRAM_CHAT_ID=987654321
+   TELEGRAM_NOTIFICATIONS=true
+   ```
+
+**Notas:**
+- Si `TELEGRAM_NOTIFICATIONS=false` o las variables están vacías, no se enviarán notificaciones
+- La notificación de éxito solo se envía cuando hay nuevas versiones subidas (no en cada ejecución)
+- La notificación de error se envía automáticamente cuando ocurre un error crítico
+- Los errores de Telegram se loguean pero no bloquean la ejecución
+
 ## 🤖 Automatización (GitHub Actions)
 
 PESync está diseñado para ejecutarse de forma totalmente desatendida mediante GitHub Actions. El flujo de trabajo incluido (`.github/workflows/sync.yml`) se encarga de:
@@ -141,7 +175,7 @@ El proyecto sigue principios de Clean Code, dividiendo las responsabilidades en 
 - `src/core/`: Contiene la lógica central de sincronización y procesamiento de archivos (`backup_logic.py`).
 - `src/providers/`: Gestiona la integración con los proveedores de almacenamiento en la nube (Dropbox, Google Drive).
 - `src/network/`: Centraliza todas las operaciones de red y descargas HTTP usando `requests`.
-- `src/utils/`: Herramientas compartidas (formateo, logging) y **Salud del Sistema** (`health_checks.py`).
+- `src/utils/`: Herramientas compartidas (formateo, logging), sistema de notificaciones Telegram (`notifications.py`) y salud del sistema (`health_checks.py`).
 - `scripts/setup_storage.py`: Utilidad interactiva para la configuración inicial y OAuth.
 - `scripts/test_sync.py`: Atajo para validación rápida de conexión sin iniciar el asistente.
 - `requirements.txt`: Definición de dependencias del proyecto.
