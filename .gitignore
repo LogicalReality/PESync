@@ -5,6 +5,7 @@ __pycache__/
 logs/
 .local/
 MEMORIA.md
+FEATURES_PLAN.md
 
 # Secrets and credentials
 *.json
