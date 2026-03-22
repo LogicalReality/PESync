@@ -33,50 +33,20 @@ def create_shared_progress() -> Progress:
 # ==========================================
 # CONSTANTES GLOBALES
 # ==========================================
-MAX_RETRIES = 3
-RETRY_DELAY = 5  # segundos
+from src.config import config # type: ignore
+
 VERSION_REGEX = re.compile(r"(\d+\.\d+[\d.]*)\.zip", re.IGNORECASE)
 TAG_REGEX = re.compile(r"v\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9]+)?")
 
+MAX_RETRIES = config.max_retries
+RETRY_DELAY = config.retry_delay
+BACKUP_CONFIG = {
+    "emu": config.backup_count,
+    "licenses": config.backup_count,
+    "system": config.backup_count,
+}
+EMU_ASSET_IDENTIFIER = config.emu_asset_identifier
 
-# Configuración de cantidad de versiones a respaldar
-def _get_backup_count() -> int:
-    try:
-        count = int(os.environ.get("BACKUP_COUNT", 2))
-        return count if count > 0 else 2
-    except (ValueError, TypeError):
-        return 2
-
-
-BACKUP_COUNT = _get_backup_count()
-
-BACKUP_CONFIG = {"emu": BACKUP_COUNT, "licenses": BACKUP_COUNT, "system": BACKUP_COUNT}
-
-
-# ==========================================
-# SEGURIDAD Y CIFRADO
-# ==========================================
-def xor_cipher(data: str, key: str = "pesync_2026") -> str:
-    """Aplica un cifrado XOR simple. Útil para ocultar strings de escaneos básicos."""
-    try:
-        # Intentamos decodificar desde hexadecimal
-        data_bytes = bytes.fromhex(data)
-        return bytes(
-            [b ^ ord(key[i % len(key)]) for i, b in enumerate(data_bytes)]
-        ).decode("utf-8")
-    except (ValueError, UnicodeDecodeError):
-        # Si falla (o si queremos codificar), devolvemos el hex del XOR
-        return bytes(
-            [ord(c) ^ ord(key[i % len(key)]) for i, c in enumerate(data)]
-        ).hex()
-
-
-EMU_RELEASES_API_URL = xor_cipher(
-    "181107091d59701d575b425e00171c004e3a5f451c5215135c181e0a7044011d4415151c0a41063b575e1f531d105c1c0a06311d42575a1504001c1d"
-)  # URL de la API para las versiones del Emu
-EMU_ASSET_IDENTIFIER = xor_cipher(
-    "0311161803073a515b1f5113065e0a1a0231565140525e240309270e3e5555"
-)  # Fragmento para identificar el binario del Emu
 
 # ==========================================
 # TELEGRAM NOTIFICATIONS

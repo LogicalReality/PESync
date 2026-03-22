@@ -23,7 +23,6 @@ from src.utils.helpers import (  # type: ignore
     logger,
     BACKUP_CONFIG,
     EMU_ASSET_IDENTIFIER,
-    xor_cipher,
     normalize_filename,
     is_license_file,
     is_system_file,
@@ -36,6 +35,7 @@ from src.network.http_utils import (  # type: ignore
     get_latest_links,
     download_asset,
 )
+from src.config import config # type: ignore
 
 # ==========================================
 # CONFIGURACIÓN INICIAL
@@ -312,9 +312,7 @@ def main():
 
         lic_items, lic_delete = collect_generic_pending(
             backed_up,
-            xor_cipher(
-                "181107091d59701d404059140e16001d4d3157441d5314001d541e1130561d595309165e485d4c"
-            ),
+            config.licenses_url,
             "licenses",
             "LICENCIAS",
             ".zip",
@@ -323,9 +321,7 @@ def main():
 
         sys_items, sys_delete = collect_generic_pending(
             backed_up,
-            xor_cipher(
-                "181107091d59701d404059140e16001d4d3157441d5a1111160a1a4e2c45594655184815101c0e28534257455d13424041"
-            ),
+            config.system_url,
             "system",
             "SISTEMA",
             "firmware",

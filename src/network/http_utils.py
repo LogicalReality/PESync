@@ -1,26 +1,31 @@
 from __future__ import annotations
 import os
-import requests # type: ignore
+import requests  # type: ignore
 import time
 from typing import Any, cast
-from bs4 import BeautifulSoup # type: ignore
-from rich.progress import Progress # type: ignore
+from bs4 import BeautifulSoup  # type: ignore
+from rich.progress import Progress  # type: ignore
 
 # Importar herramientas locales
-from src.utils.helpers import ( # type: ignore
+from src.utils.helpers import (
     logger,
     MAX_RETRIES,
     RETRY_DELAY,
-    EMU_RELEASES_API_URL,
-    xor_cipher
-)
+) # type: ignore
+from src.config import config # type: ignore
+
 
 def is_valid_link(link: str) -> bool:
     return link.startswith("https://") and link.endswith(".zip")
 
+
 def get_emu_releases(n: int = 2) -> list[dict[str, Any]]:
     try:
-        response = requests.get(EMU_RELEASES_API_URL, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
+        response = requests.get(
+            config.emu_releases_api_url,
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=20,
+        )
         response.raise_for_status()
         data = response.json()
         if not data:
@@ -32,18 +37,29 @@ def get_emu_releases(n: int = 2) -> list[dict[str, Any]]:
         logger.exception("Error al obtener las versiones:")
         return []
 
-def get_latest_links(url: str, limit: int = 2, max_retries: int = MAX_RETRIES) -> list[str]:
+
+def get_latest_links(
+    url: str, limit: int = 2, max_retries: int = MAX_RETRIES
+) -> list[str]:
     for attempt in range(max_retries):
         try:
-            response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+            response = requests.get(
+                url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15
+            )
             response.raise_for_status()
             html = response.text
 
-            soup = BeautifulSoup(html, 'html.parser')
-            links: list[str] = [str(a['href']) for a in soup.find_all('a', href=True) if is_valid_link(str(a['href']))]
+            soup = BeautifulSoup(html, "html.parser")
+            links: list[str] = [
+                str(a["href"])
+                for a in soup.find_all("a", href=True)
+                if is_valid_link(str(a["href"]))
+            ]
 
             if not links:
-                logger.critical("No se encontraron recursos válidos. ¡La estructura remota podría haber cambiado!")
+                logger.critical(
+                    "No se encontraron recursos válidos. ¡La estructura remota podría haber cambiado!"
+                )
                 return []
 
             unique_links: list[str] = list(dict.fromkeys(links))
@@ -59,41 +75,44 @@ def get_latest_links(url: str, limit: int = 2, max_retries: int = MAX_RETRIES) -
                 return []
     return []
 
+
 def download_asset(url: str, file_name: str, progress: Progress | None = None) -> bool:
     logger.info(f"Descargando: {file_name}...")
     try:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-            'Referer': xor_cipher("181107091d59701d404059140e16001d4d3157441d")
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Referer": config.referer_url,
         }
         with requests.get(url, headers=headers, stream=True, timeout=60) as r:
             r.raise_for_status()
-            
-            
-            total_size = int(r.headers.get('content-length', 0))
+
+            total_size = int(r.headers.get("content-length", 0))
             task_id = None
-            
+
             # Usar cast para que Pyre reconozca el objeto progress
             p = cast(Progress, progress) if progress is not None else None
-            
+
             if p is not None:
-                task_id = p.add_task(description="Download", filename=os.path.basename(file_name), total=total_size)
-            
-            with open(file_name, 'wb') as f:
+                task_id = p.add_task(
+                    description="Download",
+                    filename=os.path.basename(file_name),
+                    total=total_size,
+                )
+
+            with open(file_name, "wb") as f:
                 # Usar chunk de 1MB
                 for chunk in r.iter_content(chunk_size=1024 * 1024):
-                        if not chunk:
-                            continue
-                        f.write(chunk)
-                        
-                        # Manejo explícito de progreso para el linter
-                        if progress is not None and task_id is not None:
-                            p = cast(Progress, progress)
-                            p.update(task_id, advance=len(bytes(chunk)))
-                    
+                    if not chunk:
+                        continue
+                    f.write(chunk)
+
+                    # Manejo explícito de progreso para el linter
+                    if progress is not None and task_id is not None:
+                        p = cast(Progress, progress)
+                        p.update(task_id, advance=len(bytes(chunk)))
+
         logger.info(f"Descarga completada exitosamente: {file_name}")
         return True
     except Exception:
         logger.exception(f"Error al descargar {file_name}:")
         return False
-
