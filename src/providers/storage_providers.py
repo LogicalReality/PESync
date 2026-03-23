@@ -15,8 +15,8 @@ from concurrent.futures import ThreadPoolExecutor
 from rich.progress import Progress # type: ignore
 from src.utils.helpers import logger, create_shared_progress # type: ignore
 
-# Tamaño de chunk (fijado a 32MB para alto rendimiento en conexiones modernas)
-CHUNK_SIZE = 32 * 1024 * 1024
+# Tamaño de chunk (fijado a 16MB para mayor estabilidad en conexiones variables)
+CHUNK_SIZE = 16 * 1024 * 1024
 
 # ==========================================
 # INTERFAZ ABSTRACTA DE PROVEEDOR

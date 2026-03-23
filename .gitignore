@@ -6,6 +6,7 @@ logs/
 .local/
 MEMORIA.md
 FEATURES_PLAN.md
+*.bat
 
 # Secrets and credentials
 *.json

@@ -49,7 +49,7 @@ def get_latest_links(
             response.raise_for_status()
             html = response.text
 
-            soup = BeautifulSoup(html, "html.parser")
+            soup = BeautifulSoup(html, "lxml")
             links: list[str] = [
                 str(a["href"])
                 for a in soup.find_all("a", href=True)

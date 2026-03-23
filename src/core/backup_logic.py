@@ -308,27 +308,22 @@ def main():
 
         # ── Fase 1: Recopilar pendientes de TODAS las categorías ──────────────────
         logger.info("[SYNC] Fase 1: Verificando pendientes en todas las categorías...")
+        all_items: list[tuple[str, str, str]] = []
+        all_deletes: list[str] = []
+
         emu_items, emu_delete = collect_emu_pending(backed_up)
+        all_items.extend(emu_items)
+        all_deletes.extend(emu_delete)
 
-        lic_items, lic_delete = collect_generic_pending(
-            backed_up,
-            config.licenses_url,
-            "licenses",
-            "LICENCIAS",
-            ".zip",
-            "firmware",
-        )
+        generic_tasks = [
+            (config.licenses_url, "licenses", "LICENCIAS", ".zip", "firmware"),
+            (config.system_url, "system", "SISTEMA", "firmware", None),
+        ]
 
-        sys_items, sys_delete = collect_generic_pending(
-            backed_up,
-            config.system_url,
-            "system",
-            "SISTEMA",
-            "firmware",
-        )
-
-        all_items = emu_items + lic_items + sys_items
-        all_deletes = emu_delete + lic_delete + sys_delete
+        for url, key, cat, ext, excl in generic_tasks:
+            items, deletes = collect_generic_pending(backed_up, url, key, cat, ext, excl)
+            all_items.extend(items)
+            all_deletes.extend(deletes)
 
         # ── Fase 2: Descargar todo en paralelo y subir en batch ───────────────────
         uploaded_files: list[tuple[str, str]] = []
