@@ -29,6 +29,7 @@ from src.utils.helpers import (  # type: ignore
     VERSION_REGEX,
     TAG_REGEX,
     create_shared_progress,
+    calculate_sha256,
 )
 from src.network.http_utils import (  # type: ignore
     get_emu_releases,
@@ -78,9 +79,14 @@ def sync_to_storage(
                 download_url, file_name, category = item
                 local_path = os.path.join(temp_dir, file_name)
                 logger.info(f"[{category}] Descargando: {file_name}")
-                if download_asset(download_url, local_path, progress_bar):
+                file_hash = download_asset(download_url, local_path, progress_bar)
+                if file_hash:
+                    # Crear archivo .sha256 localmente
+                    hash_path = f"{local_path}.sha256"
+                    with open(hash_path, "w", encoding="utf-8") as hf:
+                        hf.write(f"{file_hash}  {file_name}")
                     return local_path
-                logger.error(f"[{category}] Fallo al descargar: {file_name}")
+                logger.error(f"[{category}] Fallo al descargar o verificar: {file_name}")
                 return None
 
             with create_shared_progress() as progress:
@@ -99,7 +105,15 @@ def sync_to_storage(
             )
 
             if downloaded_paths:
-                if provider.upload_files(downloaded_paths):
+                # Incluir los archivos .sha256 en la lista de archivos a subir
+                paths_to_upload = []
+                for p in downloaded_paths:
+                    paths_to_upload.append(p)
+                    hash_p = f"{p}.sha256"
+                    if os.path.exists(hash_p):
+                        paths_to_upload.append(hash_p)
+                
+                if provider.upload_files(paths_to_upload):
                     for p in downloaded_paths:
                         basename = os.path.basename(p)
                         backed_up.add(basename)

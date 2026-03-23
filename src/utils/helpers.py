@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 import time
 import logging
+import hashlib
 import logging.handlers
 import re
 from rich.progress import (
@@ -225,3 +226,77 @@ def wait_for_exit(timeout: int = 15):
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             except Exception:
                 pass
+
+
+# ==========================================
+# REINTENTOS Y RESILIENCIA
+# ==========================================
+from functools import wraps
+import random
+
+
+def retry_with_backoff(
+    max_retries: int = MAX_RETRIES,
+    initial_delay: int = RETRY_DELAY,
+    backoff_factor: float = 2.0,
+    exceptions: tuple = (Exception,),
+):
+    """
+    Decorador para reintentar una función con backoff exponencial.
+    
+    Args:
+        max_retries: Número máximo de reintentos.
+        initial_delay: Tiempo de espera inicial en segundos.
+        backoff_factor: Factor por el cual se multiplica el tiempo de espera en cada reintento.
+        exceptions: Tupla de excepciones que disparan un reintento.
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            delay = initial_delay
+            last_exception = None
+
+            # El primer intento es el intento 0, luego reintentos del 1 al max_retries
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    if attempt == max_retries:
+                        logger.error(
+                            f"Se alcanzó el máximo de reintentos ({max_retries}) para '{func.__name__}': {e}"
+                        )
+                        break
+
+                    # Añadir un pequeño "jitter" (desviación aleatoria) para evitar "thundering herd"
+                    current_delay = delay + random.uniform(0, 1)
+                    logger.warning(
+                        f"Fallo en '{func.__name__}' (Intento {attempt + 1}/{max_retries + 1}). "
+                        f"Reintentando en {current_delay:.2f}s... Error: {e}"
+                    )
+
+                    time.sleep(current_delay)
+                    delay *= backoff_factor
+
+            # Si llegamos aquí, es que fallaron todos los intentos
+            if last_exception:
+                raise last_exception
+
+        return wrapper
+
+    return decorator
+
+
+def calculate_sha256(file_path: str) -> str:
+    """Calcula el hash SHA256 de un archivo de forma eficiente en memoria."""
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            # Leer en bloques de 64KB para no saturar memoria con archivos grandes
+            for byte_block in iter(lambda: f.read(65536), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+    except Exception as e:
+        logger.error(f"Error al calcular SHA256 para {file_path}: {e}")
+        return ""

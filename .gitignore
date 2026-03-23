@@ -6,7 +6,7 @@ logs/
 .local/
 MEMORIA.md
 FEATURES_PLAN.md
-*.bat
+tests/
 
 # Secrets and credentials
 *.json
@@ -18,3 +18,4 @@ FEATURES_PLAN.md
 *.AppImage
 *.zip
 *.exe
+*.bat

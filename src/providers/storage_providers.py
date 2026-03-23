@@ -13,7 +13,7 @@ from dropbox.files import WriteMode, UploadSessionCursor, CommitInfo # type: ign
 import requests # type: ignore
 from concurrent.futures import ThreadPoolExecutor
 from rich.progress import Progress # type: ignore
-from src.utils.helpers import logger, create_shared_progress # type: ignore
+from src.utils.helpers import logger, create_shared_progress, retry_with_backoff # type: ignore
 
 # Tamaño de chunk (fijado a 16MB para mayor estabilidad en conexiones variables)
 CHUNK_SIZE = 16 * 1024 * 1024
@@ -89,6 +89,7 @@ class DropboxProvider(StorageProvider):
             logger.exception("Error al inicializar el cliente de Dropbox:")
             return False
     
+    @retry_with_backoff()
     def list_files(self) -> set[str]:
         """Lista archivos en Dropbox."""
         if not self.dbx:
@@ -106,6 +107,7 @@ class DropboxProvider(StorageProvider):
             logger.exception("Error al listar archivos en Dropbox:")
             return set()
     
+    @retry_with_backoff()
     def upload_file(self, local_path: str, remote_name: str, progress: Progress | None = None) -> bool:
         """Sube un archivo a Dropbox con soporte para archivos grandes."""
         if not self.dbx:
@@ -176,6 +178,7 @@ class DropboxProvider(StorageProvider):
                     pass
         return False
     
+    @retry_with_backoff()
     def delete_file(self, file_name: str) -> bool:
         """Elimina un archivo de Dropbox."""
         if not self.dbx:
@@ -300,6 +303,7 @@ class GoogleDriveProvider(StorageProvider):
             # Fallback a root si falla
             self.folder_id = "root"
     
+    @retry_with_backoff()
     def list_files(self) -> set[str]:
         """Lista archivos en Google Drive (raíz)."""
         if not self.service:
@@ -320,6 +324,7 @@ class GoogleDriveProvider(StorageProvider):
             logger.exception("Error al listar archivos en Google Drive:")
             return set()
     
+    @retry_with_backoff()
     def upload_file(self, local_path: str, remote_name: str, progress: Progress | None = None) -> bool:
         """Sube un archivo a Google Drive."""
         if not self.service:
@@ -412,6 +417,7 @@ class GoogleDriveProvider(StorageProvider):
                 pass
             return False
     
+    @retry_with_backoff()
     def delete_file(self, file_name: str) -> bool:
         """Elimina un archivo de Google Drive."""
         if not self.service:
