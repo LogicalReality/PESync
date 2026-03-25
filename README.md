@@ -9,13 +9,13 @@ PESync es una herramienta de automatización en Python diseñada para gestionar 
 Esta herramienta está pensada para la gestión personal de respaldos y la automatización de la configuración del entorno de trabajo.
 
 ```mermaid
-graph LR
-    A[Entorno Local] -- "scripts/setup_storage.py" --> B(Configuración .env)
-    B -- "scripts/test_sync.py" --> C{Validación}
-    C -- "main.py" --> D[Cloud Storage]
-    D -.-> D1[Dropbox]
-    D -.-> D2[Google Drive]
-    E[GitHub Actions] -- "Secrets" --> D
+graph TD
+    A[Usuario] -- "iniciar_pesync.bat" --> B[main.py]
+    B -- "Módulos src/" --> C{Cloud Storage}
+    C --> D[Google Drive]
+    C --> E[Dropbox]
+    F[GitHub Actions] -- "sync.yml" --> B
+    G[Configuración] -- "tools/pesync_setup.bat" --> H[.env]
 ```
 
 ## 🚀 Características
@@ -81,38 +81,9 @@ Para obtener estas credenciales, ejecuta el asistente interactivo:
 
 ```bash
 # Opción 1: Ejecutar archivo .bat (Windows)
-.\pesync_setup.bat
-
-# Opción 2: Usar el comando CLI
-python main.py setup
-```
-
-Sigue las instrucciones en pantalla para autorizar la aplicación en tu cuenta de Dropbox o Google Drive. Al finalizar, el script intentará crear/actualizar el archivo `.env` automáticamente.
-
-### Paso 2: Prueba de Conexión (Recomendado)
-
-Antes de la primera ejecución o tras actualizar tus credenciales, verifica que todo funcione correctamente:
-
-```bash
-# Opción 1: Ejecutar archivo .bat (Windows)
-.\pesync_test.bat
-
-# Opción 2: Usar el comando CLI
-python main.py test
-```
-
-Este script valida que las llaves guardadas en el archivo `.env` (u obtenidas vía Secrets) sean funcionales y tengan los permisos necesarios.
-
-### Consultar Estado del Backup
-
-Puedes ver rápidamente qué archivos tienes en la nube sin iniciar una sincronización:
-
-```bash
-# Opción 1: Ejecutar archivo .bat (Windows)
-.\pesync_status.bat
-
-# Opción 2: Usar el comando CLI
-python main.py status
+.\tools\pesync_setup.bat
+.\tools\pesync_test.bat
+.\tools\pesync_status.bat
 ```
 
 ### Configuración de Versiones
@@ -191,21 +162,21 @@ El sistema divide automáticamente las subidas grandes en bloques fijos de **8MB
 
 ### Resumen de Uso
 
-1. **Obtener Credenciales:** Ejecuta `pesync_setup.bat`.
-2. **Validar Conexión:** Ejecuta `pesync_test.bat`.
-3. **Ejecutar Sincronización:** Ejecuta `iniciar_pesync.bat` o `python main.py`.
+1. **Obtener Credenciales:** Ejecuta `.\tools\pesync_setup.bat`.
+2. **Validar Conexión:** Ejecuta `.\tools\pesync_test.bat`.
+3. **Ejecutar Sincronización:** Ejecuta `iniciar_pesync.bat` (en la raíz) o `python main.py`.
 
-## 🛠 Estructura (Arquitectura Modular)
+> [!TIP]
+> Para una guía detallada de todos los comandos y opciones, consulta nuestra [Guía de Uso CLI](docs/GUI_USO_CLI.md).
 
-El proyecto sigue principios de Clean Code, dividiendo las responsabilidades en módulos independientes:
+## 🛠 Estructura (Arquitectura Organizada)
 
-- `main.py`: Punto de entrada principal (Typer CLI).
-- `src/cli/`: Lógica de la interfaz de comandos y orquestación de sub-comandos.
-- `src/core/`: Contiene la lógica central de sincronización y procesamiento de archivos (`backup_logic.py`).
-- `src/providers/`: Gestiona la integración con los proveedores de almacenamiento en la nube (Dropbox, Google Drive).
-- `src/network/`: Centraliza todas las operaciones de red y descargas HTTP usando `requests`.
-- `src/utils/`: Herramientas compartidas (formateo, logging), sistema de notificaciones Telegram e integridad.
-- `scripts/`: Scripts heredados y auxiliares para configuración inicial.
-- `tests/`: Suite completa de pruebas automatizadas.
-- `requirements.txt`: Definición de dependencias del proyecto.
-- `*.bat`: Lanzadores rápidos para Windows.
+El proyecto sigue principios de Clean Code, dividiendo responsabilidades de forma clara:
+
+- **Raíz / `main.py`**: Punto de entrada principal y ejecutor diario (`iniciar_pesync.bat`).
+- **`src/`**: Motor principal del sistema (CLI, Core, Proveedores, Network, Utils).
+- **`docs/`**: Documentación detallada, planes de mejora y [guías de uso](docs/GUI_USO_CLI.md).
+- **`tools/`**: Scripts de utilidad para configuración, diagnóstico y consulta de estado.
+- **`.agents/`**: Contexto compartido para asistentes de IA (`MEMORIA.md`).
+- **`tests/`**: Suite completa de pruebas automatizadas.
+- **`scripts/`**: Lógica de configuración heredada.

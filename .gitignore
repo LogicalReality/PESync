@@ -1,12 +1,8 @@
+# Carpetas
 __pycache__/
-*.pyc
-.kilocodemodes
-.kilocode
 logs/
-.local/
-MEMORIA.md
-FEATURES_PLAN.md
 tests/
+.agents/
 
 # Secrets and credentials
 *.json
@@ -18,3 +14,5 @@ tests/
 *.AppImage
 *.zip
 *.exe
+
+*.pyc
