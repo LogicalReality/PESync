@@ -5,6 +5,7 @@ Este documento registra el progreso y el plan de mejoras del proyecto. Como Seni
 ---
 
 ## ☁️ 1. Proveedores de Almacenamiento
+
 *Añadir más opciones mejora la versatilidad para diferentes tipos de usuarios.*
 
 - [x] **Dropbox** (Implementado: `src/providers/storage_providers.py`)
@@ -14,6 +15,7 @@ Este documento registra el progreso y el plan de mejoras del proyecto. Como Seni
 ---
 
 ## 🛡️ 2. Resiliencia y Confiabilidad
+
 *Un sistema de backup que falla silenciosamente no sirve. Estos puntos son CRÍTICOS.*
 
 - [x] **Reintentos Automáticos (Exponential Backoff)** (Implementado en `helpers.py`)
@@ -23,6 +25,7 @@ Este documento registra el progreso y el plan de mejoras del proyecto. Como Seni
 ---
 
 ## 💻 3. Interfaz y Experiencia (UX)
+
 *Facilitar el uso y monitoreo del sistema.*
 
 - [x] **Barras de Progreso Compartidas** (Implementado con `rich`)
@@ -33,6 +36,7 @@ Este documento registra el progreso y el plan de mejoras del proyecto. Como Seni
 ---
 
 ## 📦 4. Gestión de Archivos
+
 *Optimización de recursos y seguridad.*
 
 - [x] **Subida Paralela** (Implementado con `ThreadPoolExecutor`)
@@ -40,6 +44,7 @@ Este documento registra el progreso y el plan de mejoras del proyecto. Como Seni
 ---
 
 ## ⚙️ 5. Automatización y Configuración
+
 *Eficiencia en la ejecución.*
 
 - [x] **Variables de Entorno (.env)** (Implementado)
@@ -49,6 +54,7 @@ Este documento registra el progreso y el plan de mejoras del proyecto. Como Seni
 ---
 
 ## 🛠️ 6. Calidad Técnica (Mantenibilidad)
+
 *El "Core" de un proyecto profesional.*
 
 - [x] **Tests Automatizados (Pytest)** (Suite de 12 tests implementada en `tests/`)
@@ -56,8 +62,3 @@ Este documento registra el progreso y el plan de mejoras del proyecto. Como Seni
 - [ ] **Dockerización** - *Media Prioridad:* Facilita la ejecución en NAS o servidores 24/7.
 
 ---
-
-## 📅 Hoja de Ruta Sugerida (Top 3 Próximos Pasos)
-
-1. [x] **Refactor de CLI:** Migrar a Typer/Click para una mejor experiencia de usuario y comandos claros.
-2. [ ] **Soporte OneDrive:** Ampliar los destinos de backup para mayor versatilidad.

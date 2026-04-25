@@ -136,6 +136,7 @@ PESync puede enviarte notificaciones por Telegram para mantenerte informado del 
    ```
 
 **Notas:**
+
 - Si `notifications.telegram_enabled: false` o las variables están vacías, no se enviarán notificaciones
 - La notificación de éxito solo se envía cuando hay nuevas versiones subidas (no en cada ejecución)
 - La notificación de error se envía automáticamente cuando ocurre un error crítico
@@ -156,10 +157,6 @@ PESync está diseñado para ejecutarse de forma totalmente desatendida mediante 
     - Ve a tu repositorio > **Settings** > **Secrets and variables** > **Actions**.
     - Haz clic en **New repository secret** por cada variable necesaria.
 
-### Eficiencia y Monitoreo
-
-El sistema divide automáticamente las subidas grandes en bloques fijos de **8MB**. Este valor está optimizado para garantizar alta velocidad con la máxima fluidez en las barras de progreso, además de mantener un consumo de RAM casi nulo.
-
 ### Resumen de Uso
 
 1. **Obtener Credenciales:** Ejecuta `.\tools\pesync_setup.bat`.
@@ -177,6 +174,5 @@ El proyecto sigue principios de Clean Code, dividiendo responsabilidades de form
 - **`src/`**: Motor principal del sistema (CLI, Core, Proveedores, Network, Utils).
 - **`docs/`**: Documentación detallada, planes de mejora y [guías de uso](docs/GUI_USO_CLI.md).
 - **`tools/`**: Scripts de utilidad para configuración, diagnóstico y consulta de estado.
-- **`.agents/`**: Contexto compartido para asistentes de IA (`MEMORIA.md`).
 - **`tests/`**: Suite completa de pruebas automatizadas.
 - **`scripts/`**: Lógica de configuración heredada.
