@@ -147,11 +147,17 @@ def collect_emu_pending(
     logger.info("[EMU] Verificando versiones...")
     releases: list[dict[str, Any]] = get_emu_releases(n=int(BACKUP_CONFIG.get("emu", 2)))
 
+    # 1. Extraemos los tags reales de los archivos que ya están en el storage
+    tags_en_backup: set[str] = set()
+    for f in backed_up:
+        if EMU_ASSET_IDENTIFIER in f:
+            encontrados = TAG_REGEX.findall(f)
+            if encontrados:
+                tags_en_backup.add(encontrados[0])
+
     all_core_tags: list[str] = [str(r.get("tag_name", "unknown")) for r in releases]
     core_in_backup_tags: list[str] = [
-        tag
-        for tag in all_core_tags
-        if any(tag in f and EMU_ASSET_IDENTIFIER in f for f in backed_up)
+        tag for tag in all_core_tags if tag in tags_en_backup
     ]
     logger.info(
         f"[EMU] En backup: {len(core_in_backup_tags)} de {len(all_core_tags)} - {core_in_backup_tags}"
