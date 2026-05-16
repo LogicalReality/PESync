@@ -290,10 +290,48 @@ class GoogleDriveProvider(StorageProvider):
         except Exception:
             logger.exception("Error al listar archivos en Google Drive:")
             return set()
+
+    def _find_files_by_name(self, file_name: str) -> list[dict[str, str]]:
+        """Busca archivos no eliminados con nombre exacto en la carpeta configurada."""
+        if not self.service:
+            return []
+
+        escaped_name = file_name.replace("\\", "\\\\").replace("'", "\\'")
+        query = (
+            f"name='{escaped_name}' and "
+            f"'{self.folder_id}' in parents and "
+            "trashed=false"
+        )
+        results = self.service.files().list(
+            q=query,
+            pageSize=100,
+            fields="files(id, name)",
+        ).execute()
+        return [
+            {"id": str(item["id"]), "name": str(item["name"])}
+            for item in results.get("files", [])
+            if "id" in item and "name" in item
+        ]
+
+    def _delete_files_by_id(self, files: list[dict[str, str]]) -> None:
+        """Elimina duplicados por ID sin interrumpir una subida exitosa."""
+        if not self.service:
+            return
+
+        for file_info in files:
+            try:
+                self.service.files().delete(fileId=file_info["id"]).execute()
+                logger.info(
+                    f"{self._log_prefix()} Duplicado eliminado: {file_info['name']}"
+                )
+            except Exception:
+                logger.exception(
+                    f"Error al eliminar duplicado en Google Drive: {file_info}"
+                )
     
     @retry_with_backoff()
     def upload_file(self, local_path: str, remote_name: str, progress: Progress | None = None) -> bool:
-        """Sube un archivo a Google Drive usando carga resumible."""
+        """Sube un archivo a Google Drive usando carga resumible e idempotente."""
         if not self.service:
             return False
         
@@ -307,18 +345,32 @@ class GoogleDriveProvider(StorageProvider):
             task_id = None
             if progress is not None:
                 task_id = progress.add_task(description="Upload", filename=remote_name, total=float(file_size))
+
+            existing_files = self._find_files_by_name(remote_name)
+            file_to_update = existing_files[0] if existing_files else None
+            duplicate_files = existing_files[1:]
             
             # Iniciar sesión de carga resumible
-            init_url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable"
+            if file_to_update:
+                init_url = (
+                    "https://www.googleapis.com/upload/drive/v3/files/"
+                    f"{file_to_update['id']}?uploadType=resumable"
+                )
+                metadata = {"name": remote_name}
+                start_upload = self.session.patch
+            else:
+                init_url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable"
+                metadata = {"name": remote_name, "parents": [self.folder_id]}
+                start_upload = self.session.post
+
             headers = {
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json; charset=UTF-8",
                 "X-Upload-Content-Type": "application/octet-stream",
                 "X-Upload-Content-Length": str(file_size)
             }
-            metadata = {"name": remote_name, "parents": [self.folder_id]}
             
-            response = self.session.post(init_url, headers=headers, json=metadata, timeout=30)
+            response = start_upload(init_url, headers=headers, json=metadata, timeout=30)
             response.raise_for_status()
             upload_url = response.headers.get("Location")
             
@@ -342,6 +394,9 @@ class GoogleDriveProvider(StorageProvider):
                     offset += chunk_len
                     if progress is not None and task_id is not None:
                         progress.update(task_id, advance=float(chunk_len))
+
+            if duplicate_files:
+                self._delete_files_by_id(duplicate_files)
             
             logger.info(f"{self._log_prefix()} Archivo subido correctamente.")
             return True
