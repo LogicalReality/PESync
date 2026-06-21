@@ -113,15 +113,19 @@ def sync_to_storage(
                         if os.path.exists(hash_p):
                             paths_to_upload.append(hash_p)
                 
-                if provider.upload_files(paths_to_upload):
-                    for p in downloaded_paths:
-                        basename = os.path.basename(p)
-                        backed_up.add(basename)
-                        item = next(
-                            (i for i in all_items_to_download if i[1] == basename), None
-                        )
-                        if item:
-                            uploaded_files.append((basename, item[2]))
+                uploaded_names = provider.upload_files(paths_to_upload)
+                for p in downloaded_paths:
+                    basename = os.path.basename(p)
+                    if basename not in uploaded_names:
+                        # Subida fallida: no marcar como respaldado para que el
+                        # próximo run lo reintente.
+                        continue
+                    backed_up.add(basename)
+                    item = next(
+                        (i for i in all_items_to_download if i[1] == basename), None
+                    )
+                    if item:
+                        uploaded_files.append((basename, item[2]))
                     any_uploaded = True
 
         finally:

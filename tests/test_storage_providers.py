@@ -1,5 +1,8 @@
 import pytest # type: ignore
 import os
+import threading
+import time
+import requests
 from unittest.mock import MagicMock, mock_open, patch
 from src.providers.storage_providers import DropboxProvider, GoogleDriveProvider # type: ignore
 
@@ -94,3 +97,92 @@ def test_google_drive_upload_cleans_duplicate_files_after_update():
         for call in provider.service.files.return_value.delete.call_args_list
     ]
     assert deleted_ids == ["file-2", "file-3"]
+
+
+# ── Fix 1: el acceso al cliente httplib2 (self.service) debe serializarse ──────
+def test_google_drive_service_access_is_serialized_across_threads():
+    """Dos uploads en paralelo no deben usar self.service concurrentemente.
+
+    Reproduce el SSLError (DECRYPTION_FAILED_OR_BAD_RECORD_MAC) causado por
+    httplib2 no thread-safe. Con el lock, las llamadas a service se serializan.
+    """
+    provider = _google_drive_provider([])
+    state = {"active": 0, "breached": False}
+    guard = threading.Lock()
+
+    def execute_side_effect(*args, **kwargs):
+        with guard:
+            state["active"] += 1
+            if state["active"] > 1:
+                state["breached"] = True
+        time.sleep(0.02)
+        with guard:
+            state["active"] -= 1
+        return {"files": []}
+
+    provider.service.files.return_value.list.return_value.execute.side_effect = (
+        execute_side_effect
+    )
+
+    with (
+        patch("src.providers.storage_providers.os.path.getsize", return_value=4),
+        patch("builtins.open", mock_open(read_data=b"data")),
+    ):
+        result = provider.upload_files(["/tmp/a.bin", "/tmp/b.bin"])
+
+    assert state["breached"] is False
+    assert result == {"a.bin", "b.bin"}
+
+
+# ── Fix 2: errores transitorios deben reintentarse, no tragarse ───────────────
+def test_google_drive_upload_retries_on_transient_error(mocker):
+    provider = _google_drive_provider([])
+    mocker.patch("src.utils.helpers.time.sleep", return_value=None)
+    calls = {"n": 0}
+
+    def flaky(_name):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise requests.exceptions.ConnectionError("transient")
+        return []
+
+    mocker.patch.object(provider, "_find_files_by_name", side_effect=flaky)
+
+    with (
+        patch("src.providers.storage_providers.os.path.getsize", return_value=4),
+        patch("builtins.open", mock_open(read_data=b"data")),
+    ):
+        assert provider.upload_file("/tmp/a.bin", "a.bin") is True
+
+    assert calls["n"] == 2
+
+
+# ── Fix 3: upload_files retorna el set de basenames subidos OK (parcial) ───────
+def test_google_drive_upload_files_returns_succeeded_basenames(mocker):
+    provider = GoogleDriveProvider()
+
+    def fake_upload(_local_path, remote_name, progress=None):
+        if remote_name == "bad.bin":
+            raise RuntimeError("boom")
+        return True
+
+    mocker.patch.object(provider, "upload_file", side_effect=fake_upload)
+    result = provider.upload_files(["/tmp/good.bin", "/tmp/bad.bin"])
+    assert result == {"good.bin"}
+
+
+def test_google_drive_upload_files_empty_returns_empty_set():
+    assert GoogleDriveProvider().upload_files([]) == set()
+
+
+def test_dropbox_upload_files_returns_succeeded_basenames(mocker):
+    provider = DropboxProvider()
+    mocker.patch.object(
+        provider, "upload_file", side_effect=lambda p, n, prog=None: n != "bad.bin"
+    )
+    result = provider.upload_files(["/tmp/good.bin", "/tmp/bad.bin"])
+    assert result == {"good.bin"}
+
+
+def test_dropbox_upload_files_empty_returns_empty_set():
+    assert DropboxProvider().upload_files([]) == set()
