@@ -43,6 +43,7 @@ jobs:
         run: python main.py
 
       - name: Keepalive Workflow
-        uses: gautamkrishnar/keepalive-workflow@v2
-        with:
-          use_api: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method PUT /repos/${{ github.repository }}/actions/workflows/sync.yml/enable || true
