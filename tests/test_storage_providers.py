@@ -186,3 +186,99 @@ def test_dropbox_upload_files_returns_succeeded_basenames(mocker):
 
 def test_dropbox_upload_files_empty_returns_empty_set():
     assert DropboxProvider().upload_files([]) == set()
+
+
+# ── Fix 4: list_files debe paginar con nextPageToken y propagar errores ───────
+def test_google_drive_list_files_paginates_correctly():
+    """Verifica que list_files en Google Drive itere correctamente a través de múltiples páginas."""
+    provider = GoogleDriveProvider()
+    provider.folder_id = "folder-123"
+    provider.service = MagicMock()
+
+    # Simular 2 páginas de resultados
+    page1 = {
+        "files": [{"name": "file1.zip"}, {"name": "file2.zip"}],
+        "nextPageToken": "token-page-2",
+    }
+    page2 = {
+        "files": [{"name": "file3.zip"}],
+    }
+
+    provider.service.files.return_value.list.return_value.execute.side_effect = [
+        page1,
+        page2,
+    ]
+
+    files = provider.list_files()
+
+    assert files == {"file1.zip", "file2.zip", "file3.zip"}
+    assert provider.service.files.return_value.list.call_count == 2
+    # Verificar que en la segunda llamada se haya pasado pageToken
+    second_call_kwargs = (
+        provider.service.files.return_value.list.call_args_list[1].kwargs
+    )
+    assert second_call_kwargs["pageToken"] == "token-page-2"
+
+
+def test_google_drive_list_files_propagates_on_error(mocker):
+    """Verifica que list_files no se trague las excepciones devolviendo set() vacío."""
+    provider = GoogleDriveProvider()
+    provider.folder_id = "folder-123"
+    provider.service = MagicMock()
+    mocker.patch("src.utils.helpers.time.sleep", return_value=None)
+
+    provider.service.files.return_value.list.return_value.execute.side_effect = (
+        requests.exceptions.ConnectionError("Drive API down")
+    )
+
+    with pytest.raises(requests.exceptions.ConnectionError):
+        provider.list_files()
+
+
+def test_dropbox_list_files_propagates_on_error(mocker):
+    """Verifica que list_files en Dropbox propague excepciones cuando falla."""
+    provider = DropboxProvider()
+    provider.dbx = MagicMock()
+    mocker.patch("src.utils.helpers.time.sleep", return_value=None)
+
+    provider.dbx.files_list_folder.side_effect = RuntimeError("Dropbox API error")
+
+    with pytest.raises(RuntimeError):
+        provider.list_files()
+
+
+def test_google_drive_resolve_folder_id_failure_makes_connect_fail(mocker):
+    """Verifica que si _resolve_folder_id falla, connect() retorne False en lugar de caer silenciosamente a 'root'."""
+    mocker.patch.dict(
+        os.environ,
+        {
+            "GOOGLE_DRIVE_CLIENT_ID": "id",
+            "GOOGLE_DRIVE_CLIENT_SECRET": "secret",
+            "GOOGLE_DRIVE_REFRESH_TOKEN": "token",
+        },
+    )
+    provider = GoogleDriveProvider()
+    provider.folder_name = "PESync_Backup"
+    provider.folder_id = "root"
+
+    mock_creds = MagicMock()
+    mock_service = MagicMock()
+    mock_build = MagicMock(return_value=mock_service)
+
+    mocker.patch.dict(
+        "sys.modules",
+        {
+            "google.oauth2.credentials": MagicMock(
+                Credentials=MagicMock(return_value=mock_creds)
+            ),
+            "googleapiclient.discovery": MagicMock(build=mock_build),
+        },
+    )
+
+    mocker.patch.object(
+        provider,
+        "_resolve_folder_id",
+        side_effect=RuntimeError("Folder resolution failed"),
+    )
+
+    assert provider.connect() is False

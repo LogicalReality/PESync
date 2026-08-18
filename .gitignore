@@ -2,7 +2,6 @@
 .atl/
 __pycache__/
 logs/
-tests/
 .agents/
 .atl/
 
@@ -18,3 +17,5 @@ tests/
 *.exe
 
 *.pyc
+.venv/
+.pytest_cache/

@@ -129,16 +129,12 @@ class DropboxProvider(StorageProvider):
             logger.error("Cliente de Dropbox no inicializado.")
             return set()
         
-        try:
-            result = self.dbx.files_list_folder("")
-            files: set[str] = {entry.name for entry in result.entries}
-            while result.has_more:
-                result = self.dbx.files_list_folder_continue(result.cursor)
-                files.update(entry.name for entry in result.entries)
-            return files
-        except Exception:
-            logger.exception("Error al listar archivos en Dropbox:")
-            return set()
+        result = self.dbx.files_list_folder("")
+        files: set[str] = {entry.name for entry in result.entries}
+        while result.has_more:
+            result = self.dbx.files_list_folder_continue(result.cursor)
+            files.update(entry.name for entry in result.entries)
+        return files
     
     @retry_with_backoff()
     def upload_file(self, local_path: str, remote_name: str, progress: Progress | None = None) -> bool:
@@ -279,38 +275,53 @@ class GoogleDriveProvider(StorageProvider):
         if not self.service or not self.folder_name:
             return
             
-        try:
-            query = f"name='{self.folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        escaped_name = self.folder_name.replace("\\", "\\\\").replace("'", "\\'")
+        query = f"name='{escaped_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        with self._service_lock:
             results = self.service.files().list(q=query, pageSize=1, fields="files(id, name)").execute()
-            files = results.get('files', [])
-            
-            if files:
-                self.folder_id = cast(str, files[0]['id'])
-                logger.info(f"{self._log_prefix()} Carpeta encontrada: '{self.folder_name}' (ID: {self.folder_id})")
-            else:
-                logger.info(f"{self._log_prefix()} Creando carpeta: '{self.folder_name}'")
-                file_metadata = {'name': self.folder_name, 'mimeType': 'application/vnd.google-apps.folder'}
+        files = results.get('files', [])
+        
+        if files:
+            self.folder_id = cast(str, files[0]['id'])
+            logger.info(f"{self._log_prefix()} Carpeta encontrada: '{self.folder_name}' (ID: {self.folder_id})")
+        else:
+            logger.info(f"{self._log_prefix()} Creando carpeta: '{self.folder_name}'")
+            file_metadata = {'name': self.folder_name, 'mimeType': 'application/vnd.google-apps.folder'}
+            with self._service_lock:
                 folder = self.service.files().create(body=file_metadata, fields='id').execute()
-                self.folder_id = cast(str, folder.get('id'))
-                logger.info(f"{self._log_prefix()} Carpeta creada (ID: {self.folder_id})")
-        except Exception:
-            logger.exception(f"Error al resolver carpeta '{self.folder_name}':")
-            self.folder_id = "root"
+            self.folder_id = cast(str, folder.get('id'))
+            logger.info(f"{self._log_prefix()} Carpeta creada (ID: {self.folder_id})")
     
     @retry_with_backoff()
     def list_files(self) -> set[str]:
-        """Lista archivos en la carpeta de Google Drive."""
+        """Lista archivos en la carpeta de Google Drive con soporte de paginación."""
         if not self.service:
             return set()
         
-        try:
-            query = f"'{self.folder_id}' in parents and trashed=false"
-            results = self.service.files().list(q=query, pageSize=1000, fields="files(name)").execute()
-            items = results.get('files', [])
-            return {str(item['name']) for item in items}
-        except Exception:
-            logger.exception("Error al listar archivos en Google Drive:")
-            return set()
+        files: set[str] = set()
+        page_token: str | None = None
+        escaped_folder = self.folder_id.replace("\\", "\\\\").replace("'", "\\'")
+        query = f"'{escaped_folder}' in parents and trashed=false"
+
+        while True:
+            with self._service_lock:
+                results = (
+                    self.service.files()
+                    .list(
+                        q=query,
+                        pageSize=1000,
+                        fields="nextPageToken, files(name)",
+                        pageToken=page_token,
+                    )
+                    .execute()
+                )
+            items = results.get("files", [])
+            files.update(str(item["name"]) for item in items if "name" in item)
+            page_token = results.get("nextPageToken")
+            if not page_token:
+                break
+
+        return files
 
     def _find_files_by_name(self, file_name: str) -> list[dict[str, str]]:
         """Busca archivos no eliminados con nombre exacto en la carpeta configurada."""
