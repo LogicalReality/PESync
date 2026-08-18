@@ -6,7 +6,8 @@ on:
   workflow_dispatch: # Allow manual trigger from the GitHub UI
 
 permissions:
-  contents: read
+  actions: write
+  contents: write
 
 jobs:
   sync:
@@ -40,3 +41,8 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets['TELEGRAM_CHAT_ID'] }}
           TELEGRAM_NOTIFICATIONS: ${{ secrets['TELEGRAM_NOTIFICATIONS'] }}
         run: python main.py
+
+      - name: Keepalive Workflow
+        uses: gautamkrishnar/keepalive-workflow@v2
+        with:
+          use_api: true
